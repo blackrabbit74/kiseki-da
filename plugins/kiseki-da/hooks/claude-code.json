@@ -1,0 +1,76 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${user_config.python_executable}",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hook_entry.py", "session-start", "claude-code"]
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell|Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${user_config.python_executable}",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hook_entry.py", "pre-tool", "claude-code"]
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${user_config.python_executable}",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hook_entry.py", "post-tool", "claude-code"],
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${user_config.python_executable}",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hook_entry.py", "post-tool", "claude-code"],
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${user_config.python_executable}",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hook_entry.py", "stop", "claude-code"]
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${user_config.python_executable}",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hook_entry.py", "session-end", "claude-code"],
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}

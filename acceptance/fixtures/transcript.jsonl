@@ -1,0 +1,6 @@
+{"type": "user", "uuid": "u1", "timestamp": "2026-09-03T10:00:00+09:00", "message": {"role": "user", "content": "認証トークンの自動更新を追加して。60分でセッション切れが起きている"}}
+{"type": "assistant", "uuid": "a1", "timestamp": "2026-09-03T10:00:05+09:00", "message": {"role": "assistant", "content": [{"type": "text", "text": "更新間隔は15分と60分のどちらにしますか？成果物が変わります。"}]}}
+{"type": "user", "uuid": "u2", "timestamp": "2026-09-03T10:01:00+09:00", "message": {"role": "user", "content": [{"type": "text", "text": "15分で"}]}}
+{"type": "user", "uuid": "u3", "timestamp": "2026-09-03T10:20:00+09:00", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "toolu_01", "content": "3 passed"}]}}
+{"type": "assistant", "uuid": "a2", "timestamp": "2026-09-03T10:21:00+09:00", "message": {"role": "assistant", "content": [{"type": "text", "text": "実装しテストが通りました。変更: auth.py / 証拠: ev:s-demo-1:3 / 未検証: なし"}]}}
+{"type": "user", "uuid": "u4", "timestamp": "2026-09-03T10:22:00+09:00", "message": {"role": "user", "content": "ありがとう。今後は日時のフォーマットは ISO 8601 で統一して"}}

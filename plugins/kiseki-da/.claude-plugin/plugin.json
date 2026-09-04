@@ -1,0 +1,22 @@
+{
+  "name": "kiseki-da",
+  "version": "0.1.0-beta.1",
+  "description": "Kiseki DA is a lightweight, evidence-aware Digital Assistant harness.",
+  "author": {
+    "name": "Navigator",
+    "url": "https://github.com/blackrabbit74"
+  },
+  "homepage": "https://github.com/blackrabbit74/kiseki-da",
+  "repository": "https://github.com/blackrabbit74/kiseki-da",
+  "license": "MIT",
+  "keywords": ["personal-ai", "verification", "memory", "persona"],
+  "hooks": "./hooks/claude-code.json",
+  "userConfig": {
+    "python_executable": {
+      "type": "file",
+      "title": "Python 3.11以上の実行ファイル",
+      "description": "Kiseki DAのローカルhookを実行するPython。インストーラーが現在のPythonを設定します。",
+      "required": true
+    }
+  }
+}

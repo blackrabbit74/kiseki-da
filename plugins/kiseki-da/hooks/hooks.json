@@ -1,0 +1,62 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/scripts/hook_entry.py\" session-start codex",
+            "commandWindows": "py -3 \"${PLUGIN_ROOT}/scripts/hook_entry.py\" session-start codex",
+            "additionalContextLimit": 10000
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|apply_patch|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/scripts/hook_entry.py\" pre-tool codex",
+            "commandWindows": "py -3 \"${PLUGIN_ROOT}/scripts/hook_entry.py\" pre-tool codex"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/scripts/hook_entry.py\" post-tool codex",
+            "commandWindows": "py -3 \"${PLUGIN_ROOT}/scripts/hook_entry.py\" post-tool codex"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/scripts/hook_entry.py\" stop codex",
+            "commandWindows": "py -3 \"${PLUGIN_ROOT}/scripts/hook_entry.py\" stop codex"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/scripts/hook_entry.py\" session-end codex",
+            "commandWindows": "py -3 \"${PLUGIN_ROOT}/scripts/hook_entry.py\" session-end codex",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}

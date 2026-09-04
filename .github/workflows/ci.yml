@@ -1,0 +1,52 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.11", "3.14"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Runtime tests
+        run: python -m unittest discover -s plugins/kiseki-da/core/tests -t plugins/kiseki-da
+      - name: Distribution tests
+        run: python -m unittest discover -s tests -t .
+      - name: Plugin package validation
+        run: python -m unittest -v tests.test_plugin_package
+      - name: Publication audit
+        run: python tools/publication_audit.py
+      - name: Cross-platform smoke
+        run: python acceptance/smoke.py
+      - name: POSIX smoke
+        if: runner.os != 'Windows'
+        run: bash acceptance/smoke.sh
+
+  release-candidate:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build tracked-file archives
+        run: python tools/build_release.py
+      - name: Expand and verify release archives
+        run: python tools/verify_release_assets.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kiseki-da-release-candidate
+          path: dist/

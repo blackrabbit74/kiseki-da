@@ -1,0 +1,7 @@
+{
+  "session_id": "cx-demo-1",
+  "transcript_path": "__CWD__/rollout.jsonl",
+  "cwd": "__CWD__/repo",
+  "hook_event_name": "SessionEnd",
+  "reason": "other"
+}

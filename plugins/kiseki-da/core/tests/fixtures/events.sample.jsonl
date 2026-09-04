@@ -1,0 +1,14 @@
+{"ts": "2026-09-03T10:00:00+09:00", "sid": "s-fx-1", "seq": 1, "type": "session_start", "env": "claude-code", "source": "startup"}
+{"ts": "2026-09-03T10:00:01+09:00", "sid": "s-fx-1", "seq": 2, "type": "context_manifest", "budget": 2500, "used": 900, "parts": [{"name": "policy", "tokens": 450, "truncated": false}, {"name": "constraints", "tokens": 60, "truncated": false}, {"name": "cards", "tokens": 200, "truncated": false}, {"name": "preferences", "tokens": 80, "truncated": false}, {"name": "goals", "tokens": 0, "truncated": false}, {"name": "env", "tokens": 90, "truncated": false}, {"name": "pending", "tokens": 20, "truncated": false}], "conflicts": [], "chars": 1500}
+{"ts": "2026-09-03T10:01:00+09:00", "sid": "s-fx-1", "seq": 3, "type": "task_open", "task": "2026-09-03-auth-refresh", "risk": "R1", "kind": "code", "goal": "認証トークンの自動更新を追加する"}
+{"ts": "2026-09-03T10:02:00+09:00", "sid": "s-fx-1", "seq": 4, "type": "question", "task": "2026-09-03-auth-refresh", "text": "更新間隔は 15 分と 60 分のどちらにしますか"}
+{"ts": "2026-09-03T10:03:00+09:00", "sid": "s-fx-1", "seq": 5, "type": "assumption", "task": "2026-09-03-auth-refresh", "text": "更新間隔は 15 分"}
+{"ts": "2026-09-03T10:20:00+09:00", "sid": "s-fx-1", "seq": 6, "type": "tool_call", "tool": "Bash", "target": "pytest tests/test_auth.py -q", "ok": true, "out_len": 17, "out_hash": "5b1b6a4f3c2d"}
+{"ts": "2026-09-03T10:21:00+09:00", "sid": "s-fx-1", "seq": 7, "type": "tool_call", "tool": "Bash", "target": "pytest tests/test_other.py -q", "ok": false, "out_len": 0, "out_hash": "e3b0c44298fc"}
+{"ts": "2026-09-03T10:22:00+09:00", "sid": "s-fx-1", "seq": 8, "type": "tool_call", "tool": "Read", "target": "/repo/git-diff.txt", "ok": true, "out_len": 58, "out_hash": "9f86d081884c"}
+{"ts": "2026-09-03T10:23:00+09:00", "sid": "s-fx-1", "seq": 9, "type": "capture", "text": "GitHub Actions の ubuntu-latest は Ubuntu 24.04 になった", "source": "document:https://example.com/runners", "url": "https://example.com/runners"}
+{"ts": "2026-09-03T10:24:00+09:00", "sid": "s-fx-1", "seq": 10, "type": "correction", "before": "コミットメッセージは日本語で書く", "after": "コミットメッセージは英語で書く", "quote": "コミットは英語で統一して"}
+{"ts": "2026-09-03T10:25:00+09:00", "sid": "s-fx-1", "seq": 11, "type": "guard", "tool": "Bash", "decision": "deny", "reason": "破壊的な削除", "target": "rm -rf /"}
+{"ts": "2026-09-03T10:26:00+09:00", "sid": "s-fx-1", "seq": 12, "type": "gate", "task": "2026-09-03-auth-refresh", "blocked": true, "reason": "open な R1 カードがあります: ctx task close 2026-09-03-auth-refresh / ctx task defer 2026-09-03-auth-refresh"}
+{"ts": "2026-09-03T10:27:00+09:00", "sid": "s-fx-1", "seq": 13, "type": "search", "query": "pytest", "k": 5, "hits": ["ev:s-fx-1:6"]}
+{"ts": "2026-09-03T10:28:00+09:00", "sid": "s-fx-1", "seq": 14, "type": "session_end", "reason": "other", "candidates_created": 1}

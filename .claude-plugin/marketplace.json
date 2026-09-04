@@ -1,0 +1,27 @@
+{
+  "name": "kiseki-da",
+  "owner": {
+    "name": "Navigator",
+    "url": "https://github.com/blackrabbit74"
+  },
+  "description": "Kiseki DA public plugin marketplace",
+  "version": "0.1.0-beta.1",
+  "plugins": [
+    {
+      "name": "kiseki-da",
+      "displayName": "Kiseki DA",
+      "source": "./plugins/kiseki-da",
+      "description": "A lightweight, evidence-aware Digital Assistant harness for Claude Code and Codex.",
+      "version": "0.1.0-beta.1",
+      "author": {
+        "name": "Navigator",
+        "url": "https://github.com/blackrabbit74"
+      },
+      "homepage": "https://github.com/blackrabbit74/kiseki-da",
+      "repository": "https://github.com/blackrabbit74/kiseki-da",
+      "license": "MIT",
+      "category": "Productivity",
+      "tags": ["personal-ai", "verification", "memory", "persona"]
+    }
+  ]
+}

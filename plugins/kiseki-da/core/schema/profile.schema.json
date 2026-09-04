@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:kiseki-da:schema:profile",
+  "title": "Kiseki DA profile.toml",
+  "description": "KISEKI_DA_HOME/profile.toml schema. Schema 1 remains readable; explicit persona save migrates to schema 2.",
+  "type": "object",
+  "required": ["schema", "identity", "da"],
+  "properties": {
+    "schema": {"type": "integer", "enum": [1, 2]},
+    "identity": {
+      "type": "object",
+      "properties": {
+        "name": {"type": "string"},
+        "timezone": {"type": "string"},
+        "languages": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "da": {
+      "type": "object",
+      "description": "Schema 1 compatibility table.",
+      "properties": {"name": {"type": "string"}}
+    },
+    "persona": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string", "maxLength": 32},
+        "first_person": {"type": "string", "maxLength": 16},
+        "user_address": {"type": "string", "maxLength": 32},
+        "formality": {"type": "string", "enum": ["casual", "balanced", "formal"]},
+        "warmth": {"type": "string", "enum": ["reserved", "balanced", "warm"]},
+        "verbosity": {"type": "string", "enum": ["compact", "balanced", "detailed"]},
+        "initiative": {"type": "string", "enum": ["reactive", "balanced", "proactive"]},
+        "relationship": {"type": "string", "enum": ["neutral", "partner", "secretary", "mentor", "companion", "custom"]},
+        "custom_style": {"type": "string", "maxLength": 200}
+      }
+    },
+    "constraints": {"type": "array", "items": {"$ref": "#/$defs/item"}},
+    "preferences": {"type": "array", "items": {"$ref": "#/$defs/item"}},
+    "goals": {"type": "array", "items": {"$ref": "#/$defs/item"}},
+    "facts": {"type": "array", "items": {"$ref": "#/$defs/item"}}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"schema": {"const": 2}}},
+      "then": {"required": ["persona"]},
+      "else": {"not": {"required": ["persona"]}}
+    }
+  ],
+  "$defs": {
+    "item": {
+      "type": "object",
+      "required": ["id", "text"],
+      "properties": {
+        "id": {"type": "string"},
+        "text": {"type": "string"},
+        "source": {"type": "string"},
+        "recorded_at": {"type": "string", "format": "date"},
+        "confidence": {"type": "number", "minimum": 0.1, "maximum": 1.0},
+        "review_by": {"type": "string", "format": "date"},
+        "key": {"type": "string"},
+        "corrected_from": {"type": "string"},
+        "status": {"type": "string", "enum": ["active", "done", "dropped"]}
+      }
+    }
+  }
+}

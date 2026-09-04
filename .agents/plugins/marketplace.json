@@ -1,0 +1,20 @@
+{
+  "name": "kiseki-da",
+  "interface": {
+    "displayName": "Kiseki DA"
+  },
+  "plugins": [
+    {
+      "name": "kiseki-da",
+      "source": {
+        "source": "local",
+        "path": "./plugins/kiseki-da"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

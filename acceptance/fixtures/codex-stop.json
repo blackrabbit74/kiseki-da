@@ -1,0 +1,11 @@
+{
+  "session_id": "cx-demo-1",
+  "transcript_path": "__CWD__/rollout.jsonl",
+  "cwd": "__CWD__/repo",
+  "hook_event_name": "Stop",
+  "model": "gpt-5.6",
+  "permission_mode": "default",
+  "turn_id": "turn-1",
+  "stop_hook_active": false,
+  "last_assistant_message": "実装しました。"
+}

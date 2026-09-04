@@ -1,0 +1,22 @@
+{
+  "session_id": "s-demo-1",
+  "transcript_path": "__FX__/transcript.jsonl",
+  "cwd": "__CWD__/repo",
+  "permission_mode": "default",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Read",
+  "tool_use_id": "toolu_02",
+  "tool_input": {
+    "file_path": "__CWD__/repo/git-diff.txt"
+  },
+  "tool_response": {
+    "type": "text",
+    "file": {
+      "filePath": "__CWD__/repo/git-diff.txt",
+      "content": "diff --git a/auth.py b/auth.py\n+def refresh_token(): ...",
+      "numLines": 2,
+      "startLine": 1,
+      "totalLines": 2
+    }
+  }
+}

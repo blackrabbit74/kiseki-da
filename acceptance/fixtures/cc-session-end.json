@@ -1,0 +1,7 @@
+{
+  "session_id": "s-demo-1",
+  "transcript_path": "__FX__/transcript.jsonl",
+  "cwd": "__CWD__/repo",
+  "hook_event_name": "SessionEnd",
+  "reason": "other"
+}

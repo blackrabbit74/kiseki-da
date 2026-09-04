@@ -1,0 +1,11 @@
+schema = 2
+
+[identity]
+name = ""
+timezone = "Asia/Tokyo"
+languages = ["ja", "en"]
+
+[da]
+name = ""
+
+[persona]

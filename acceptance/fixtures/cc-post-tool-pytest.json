@@ -1,0 +1,19 @@
+{
+  "session_id": "s-demo-1",
+  "transcript_path": "__FX__/transcript.jsonl",
+  "cwd": "__CWD__/repo",
+  "permission_mode": "default",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Bash",
+  "tool_use_id": "toolu_01",
+  "tool_input": {
+    "command": "pytest tests/test_auth.py -q",
+    "description": "Run auth tests"
+  },
+  "tool_response": {
+    "stdout": "3 passed in 0.42s",
+    "stderr": "",
+    "interrupted": false,
+    "isImage": false
+  }
+}

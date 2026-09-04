@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:kiseki-da:schema:task-card",
+  "title": "Kiseki DA task card",
+  "description": "KISEKI_DA_HOME/tasks/<id>.mdをcore/ctx/taskcard.pyが読んだTaskCard。",
+  "type": "object",
+  "required": [
+    "id", "status", "risk", "kind", "created", "updated", "budget",
+    "goal", "criteria", "constraints", "assumptions", "questions", "decisions", "log"
+  ],
+  "properties": {
+    "id": {"type": "string", "description": "^[a-z0-9][a-z0-9-]{0,63}$。省略時は YYYY-MM-DD-<goal の ASCII slug>。"},
+    "status": {"type": "string", "enum": ["open", "done", "deferred", "abandoned"]},
+    "risk": {"type": "string", "enum": ["R0", "R1", "R2", "R3"]},
+    "kind": {"type": "string", "enum": ["code", "research", "decision", "ops", "writing"]},
+    "created": {"type": "string", "format": "date-time", "description": "now_iso()（秒精度、TZ 付き ISO 8601）"},
+    "updated": {"type": "string", "format": "date-time"},
+    "budget": {
+      "type": "object",
+      "description": "助言のみ。コードは強制しない。ヘッダでは `k=v` の空白区切り。",
+      "properties": {
+        "context_tokens": {"type": "integer"},
+        "worker_max": {"type": "integer"},
+        "iterations_max": {"type": "integer"},
+        "search_max": {"type": "integer"}
+      },
+      "additionalProperties": {"type": "integer"}
+    },
+    "goal": {"type": "string", "description": "# Goal の本文。利用者の言葉と理由。"},
+    "criteria": {"type": "array", "items": {"$ref": "#/$defs/criterion"}, "description": "# Done criteria の表。"},
+    "constraints": {"type": "array", "items": {"type": "string"}, "description": "# Constraints / Out of scope の箇条書き。"},
+    "assumptions": {"type": "array", "items": {"type": "string"}, "description": "# Assumptions の箇条書き。"},
+    "questions": {"type": "array", "items": {"type": "string"}, "description": "# Open questions の箇条書き。"},
+    "decisions": {"type": "array", "items": {"type": "string"}, "description": "# Decisions の箇条書き。"},
+    "log": {"type": "array", "items": {"type": "string"}, "description": "# Log の箇条書き（`<ts> <text>`）。"}
+  },
+  "$defs": {
+    "criterion": {
+      "type": "object",
+      "required": ["id", "claim", "check", "evidence", "status"],
+      "properties": {
+        "id": {"type": "string", "description": "C1..Cn。再採番しない。"},
+        "claim": {"type": "string", "description": "何が真になるか。"},
+        "check": {"type": "string", "description": "証拠を生むツール名かコマンド名で始まる検査方法（例: pytest tests/x.py、Read git diff）。"},
+        "evidence": {"type": "string", "description": "`-`（なし）または ev:<sid>:<seq>。"},
+        "status": {"type": "string", "enum": ["open", "pass", "fail", "unverified"]}
+      }
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "session_id": "cx-demo-1",
+  "transcript_path": "__CWD__/rollout.jsonl",
+  "cwd": "__CWD__/repo",
+  "hook_event_name": "SessionStart",
+  "model": "gpt-5.6",
+  "permission_mode": "default",
+  "source": "startup"
+}

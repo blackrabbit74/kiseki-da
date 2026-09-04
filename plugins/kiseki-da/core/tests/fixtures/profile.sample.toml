@@ -1,0 +1,95 @@
+schema = 1
+
+[identity]
+name = "テスト太郎"
+timezone = "Asia/Tokyo"
+languages = ["ja", "en"]
+
+[da]
+name = "ナビ"
+
+[[constraints]]
+id = "c1"
+text = "本番 DB への直接書込は禁止。マイグレーション経由のみ"
+source = "user-stated"
+recorded_at = 2026-08-01
+confidence = 1.0
+review_by = 2099-12-31
+
+[[constraints]]
+id = "c2"
+text = "3 月末までは旧 API v1 を使う"
+source = "user-stated"
+recorded_at = 2026-01-05
+confidence = 1.0
+review_by = 2026-03-31
+
+[[preferences]]
+id = "p1"
+text = "コミットメッセージは英語で書く"
+source = "user-stated"
+recorded_at = 2026-08-10
+confidence = 1.0
+review_by = 2099-12-31
+key = "commit-lang"
+
+[[preferences]]
+id = "p2"
+text = "コミットメッセージは日本語で書く"
+source = "user-stated"
+recorded_at = 2026-08-20
+confidence = 1.0
+review_by = 2099-12-31
+key = "commit-lang"
+
+[[preferences]]
+id = "p3"
+text = "説明は結論を先に書く"
+source = "approved-inference"
+recorded_at = 2026-08-25
+confidence = 0.7
+review_by = 2099-12-31
+
+[[preferences]]
+id = "p4"
+text = "インデントはスペース 4 つ"
+source = "user-stated"
+recorded_at = 2026-08-26
+confidence = 1.0
+review_by = 2099-12-31
+key = "indent"
+
+[[preferences]]
+id = "p5"
+text = "インデントはタブ"
+source = "approved-inference"
+recorded_at = 2026-08-27
+confidence = 0.6
+review_by = 2099-12-31
+key = "indent"
+
+[[goals]]
+id = "g1"
+text = "10 月末までに社内 CLI を v1 として配布する"
+source = "user-stated"
+recorded_at = 2026-08-20
+confidence = 1.0
+review_by = 2099-12-31
+status = "active"
+
+[[goals]]
+id = "g2"
+text = "8 月中に CI を GitHub Actions へ移行する"
+source = "user-stated"
+recorded_at = 2026-07-01
+confidence = 1.0
+review_by = 2099-12-31
+status = "done"
+
+[[facts]]
+id = "f1"
+text = "Repo X の CI は GitHub Actions、Python 3.12"
+source = "document:repo:X/.github/workflows/ci.yml"
+recorded_at = 2026-08-25
+confidence = 0.9
+review_by = 2099-12-31

@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "version": "0.1.0-beta.1",
+  "commit_sha": "replace-with-audited-git-commit-sha",
+  "tree_sha256": "replace-with-publication-audit-tree-sha256",
+  "gates": {
+    "user_publication_approval": {"passed": false, "evidence": ""}
+  }
+}

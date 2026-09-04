@@ -1,0 +1,14 @@
+{
+  "session_id": "cx-demo-1",
+  "transcript_path": "__CWD__/rollout.jsonl",
+  "cwd": "__CWD__/repo",
+  "hook_event_name": "PreToolUse",
+  "model": "gpt-5.6",
+  "permission_mode": "default",
+  "turn_id": "turn-1",
+  "tool_name": "Bash",
+  "tool_use_id": "call_01",
+  "tool_input": {
+    "command": "rm -rf /"
+  }
+}

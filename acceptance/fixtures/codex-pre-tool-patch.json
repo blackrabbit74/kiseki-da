@@ -1,0 +1,14 @@
+{
+  "session_id": "cx-demo-1",
+  "transcript_path": "__CWD__/rollout.jsonl",
+  "cwd": "__REPO__",
+  "hook_event_name": "PreToolUse",
+  "model": "gpt-5.6",
+  "permission_mode": "default",
+  "turn_id": "turn-1",
+  "tool_name": "apply_patch",
+  "tool_use_id": "call_03",
+  "tool_input": {
+    "command": "*** Begin Patch\n*** Update File: core/ctx/store.py\n@@\n-a\n+b\n*** End Patch\n"
+  }
+}
