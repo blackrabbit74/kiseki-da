@@ -509,14 +509,33 @@ def _manager_steps(
     new_version: str,
     inventory,
     ownership: dict[str, Any],
+    source: Path,
 ) -> dict[str, Any]:
     result_ownership = dict(ownership)
-    if replacing:
-        if inventory.plugin and ownership["plugin"]:
-            do, undo = manager.plugin_remove()
+    live_update = bool(replacing and inventory.plugin and ownership["plugin"])
+    if live_update and not inventory.plugin_enabled:
+        raise InstallerError(f"{manager.host} pluginは無効です。hostで有効化してから更新してください。")
+    if live_update and manager.host == "codex":
+        # Native `plugin add` also prunes old caches. Never run it in the live home.
+        with tempfile.TemporaryDirectory(prefix="kiseki-codex-stage-") as raw:
+            cached = manager.stage_codex_plugin(source, Path(raw).resolve() / "home", new_version)
+            _validate_installed_plugin(cached, "codex", new_version)
+            codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser().resolve()
+            destination = codex_home / "plugins" / "cache" / MARKETPLACE_ID / PLUGIN_ID / new_version
+            tx.retain_external_tree(cached, destination)
+            result_ownership["installed_path"] = str(destination)
+    if live_update and manager.host == "claude-code":
+        # On rollback restore the old source first, then select its cached plugin.
+        tx.on_rollback(manager.plugin_update())
+        if inventory.marketplace and ownership["marketplace"]:
+            do, _ = manager.marketplace_add(version=new_version)
+            undo = manager.marketplace_restore(inventory.marketplace_fingerprint)
             tx.external(do, undo, manager.run)
+        tx.external(manager.plugin_update(), None, manager.run)
+    elif replacing:
         if inventory.marketplace and ownership["marketplace"]:
             do, undo = manager.marketplace_remove(old_version=old_version)
+            undo = manager.marketplace_restore(inventory.marketplace_fingerprint)
             tx.external(do, undo, manager.run)
         inventory = manager.inventory()
     if not inventory.marketplace:
@@ -528,7 +547,7 @@ def _manager_steps(
         do, undo = manager.plugin_remove()
         tx.external(do, undo, manager.run)
         inventory = manager.inventory()
-    if not inventory.plugin or not inventory.plugin_enabled or replacing:
+    if not live_update and (not inventory.plugin or not inventory.plugin_enabled or replacing):
         do, undo = manager.plugin_add()
         installed = tx.external(do, undo, manager.run)
         installed_path = _manager_installed_path(installed)
@@ -635,7 +654,7 @@ def _inventory_summary(inventory) -> dict[str, Any]:
 def _install_action_plan(inventory, ownership: dict[str, Any], replacing: bool) -> list[str]:
     actions: list[str] = []
     if replacing and inventory.plugin and ownership.get("plugin"):
-        actions.append("owned pluginを削除して再導入")
+        actions.append("旧hook cacheを保持して新版を追加配置")
     elif inventory.plugin and not inventory.plugin_enabled:
         actions.append("disabled pluginを再導入")
     elif not inventory.plugin:
@@ -643,7 +662,7 @@ def _install_action_plan(inventory, ownership: dict[str, Any], replacing: bool) 
     else:
         actions.append("既存pluginをversion/有効性検証")
     if replacing and inventory.marketplace and ownership.get("marketplace"):
-        actions.append("owned marketplaceを削除してtag固定で再登録")
+        actions.append("owned marketplaceの参照tagを更新（pluginは削除しない）")
     elif not inventory.marketplace:
         actions.append("marketplaceをtag固定で登録")
     else:
@@ -949,6 +968,7 @@ def install(
                 new_version=new_version,
                 inventory=initial_inventories[host],
                 ownership=selected_ownership[host],
+                source=runtime,
             )
         _smoke_installed_plugins(selected_ownership, new_version)
         # Native managers may update their settings files.  Apply the optional

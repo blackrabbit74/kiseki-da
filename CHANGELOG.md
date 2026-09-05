@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-beta.5 - 2026-09-05
+
+- 更新時に稼働中の旧hook cacheを保持するよう修正。Codexは隔離したnative installで作った新版cacheを追加配置し、Claudeはcacheを保持するnative updateを使う。
+- rollbackでも公開済みcacheを保持し、元のmarketplace source/refを復元してから旧版へ戻す。
+- 実CLIで更新・失敗時rollback中の旧hook継続性を確認する`acceptance/live_update_smoke.py`を追加。
+
 ## 0.1.0-beta.4 - 2026-09-05
 
 - Claude native installがplain textを返す環境でも、更新後のinventoryから新しいcache pathを取得するよう修正。旧cacheを検証して更新がrollbackされる問題を解消。

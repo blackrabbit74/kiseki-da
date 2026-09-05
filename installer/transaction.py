@@ -329,6 +329,34 @@ class Transaction:
             raise InstallerError(f"host managerが失敗しました: {detail}")
         return result
 
+    def on_rollback(self, argv: Sequence[str]) -> None:
+        """Register a compensating command before a later change makes it necessary."""
+        values = list(map(str, argv))
+        if redact_sensitive(" ".join(values)) != " ".join(values):
+            raise InstallerError("rollback commandへ秘密情報を埋め込むことはできません。")
+        self.data["external"].append({"argv": [], "undo": values, "state": "undo_only", "returncode": None})
+        self._save()
+
+    def retain_external_tree(self, source: Path, target: Path) -> None:
+        """Publish an immutable cache; keep it even if a new session starts before rollback."""
+        target = target.absolute()
+        expected = self._signature(source)
+        if target.exists() or target.is_symlink():
+            if self._signature(target) != expected:
+                raise InstallerError(f"既存version cacheの内容が一致しません。上書きしません: {target}")
+            return
+        self.data.setdefault("retained_caches", []).append({"target": str(target), "signature": expected})
+        self._save()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        staged = target.parent / f".{target.name}.stage-{self.id}"
+        try:
+            shutil.copytree(source, staged, symlinks=True)
+            if target.exists() or target.is_symlink():
+                raise InstallerError(f"cache配置中に別の更新を検出しました: {target}")
+            os.rename(staged, target)
+        finally:
+            remove_path(staged)
+
     def commit(self, **details: object) -> None:
         try:
             self.data["status"] = "committed"
@@ -380,7 +408,7 @@ def _restore(
             errors.append("external: 前回中断時のnative undo完了状態を確認できないため再実行しません")
             continue
         undo = entry.get("undo")
-        if not undo or entry.get("state") not in {"pending", "applied", "failed"}:
+        if not undo or entry.get("state") not in {"pending", "applied", "failed", "undo_only"}:
             continue
         try:
             for file_entry in data.get("filesystem", []):

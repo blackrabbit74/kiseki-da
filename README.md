@@ -2,7 +2,7 @@
 
 **Kiseki DA（Digital Assistant）** は、Claude Code / Codex に承認制の記憶、証拠付きタスク完了、安全hook、プロジェクト別キャラクターを追加する軽量な個人AIハーネスです。Python 3.11+ の標準ライブラリだけで動き、外部telemetryはありません。
 
-> Status: `v0.1.0-beta.4`（macOS local向け公開beta）。2026-09-05の案件分離・指示優先・証拠照合の修正を含みます。
+> Status: `v0.1.0-beta.5`（macOS local向け公開beta）。2026-09-05の案件分離・指示優先・証拠照合の修正を含みます。
 
 ## 対応範囲
 
@@ -17,7 +17,7 @@
 macOS、Python 3.11〜3.14と、CodexアプリまたはClaude Code / Codex CLIが必要です。Codexアプリだけを使っていても導入でき、同梱CLIを自動検出します。Gitリポジトリでないフォルダでも使えます。
 
 ```bash
-git clone --branch v0.1.0-beta.4 --depth 1 https://github.com/blackrabbit74/kiseki-da.git
+git clone --branch v0.1.0-beta.5 --depth 1 https://github.com/blackrabbit74/kiseki-da.git
 python3 kiseki-da/install.py install --host codex --scope user
 ```
 

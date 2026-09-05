@@ -20,6 +20,7 @@ FAKE_MANAGER = r'''#!/usr/bin/env python3
 import json
 import os
 import sys
+import shutil
 from pathlib import Path
 
 host = sys.argv[1]
@@ -27,6 +28,9 @@ args = sys.argv[2:]
 if host == "claude-code" and os.environ.get("FAKE_PLUGIN_PATH"):
     os.environ["FAKE_PLUGIN_PATH"] = str(Path(os.environ["FAKE_PLUGIN_PATH"]).parent / "claude-code" / "kiseki-da")
 state_path = Path(os.environ["FAKE_MANAGER_STATE"])
+staging = host == "codex" and Path(os.environ["CODEX_HOME"]) != state_path.parent / "codex-config"
+if staging:
+    state_path = Path(os.environ["CODEX_HOME"]) / "fake-manager-state.json"
 try:
     state = json.loads(state_path.read_text(encoding="utf-8"))
 except (OSError, ValueError):
@@ -87,12 +91,17 @@ if args[:3] == ["plugin", "marketplace", "add"]:
         record["marketplace_ref"] = "v" + record["version"]
 elif args[:3] == ["plugin", "marketplace", "remove"]:
     record["marketplace"] = False
-    record["plugin"] = False
-elif len(args) >= 2 and args[:2] in (["plugin", "install"], ["plugin", "add"]):
+elif len(args) >= 2 and args[:2] in (["plugin", "install"], ["plugin", "add"], ["plugin", "update"]):
     if not record["marketplace"]:
         print("marketplace missing", file=sys.stderr)
         raise SystemExit(8)
     record["plugin"] = True
+    if staging:
+        source = Path(record["marketplace_source"]) / "plugins" / "kiseki-da"
+        version = json.loads((source / ".codex-plugin/plugin.json").read_text())["version"]
+        cached = Path(os.environ["CODEX_HOME"]) / "plugins/cache/kiseki-da/kiseki-da" / version
+        cached.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(source, cached)
 elif len(args) >= 2 and args[:2] in (["plugin", "uninstall"], ["plugin", "remove"]):
     record["plugin"] = False
 elif args[:3] in (["plugin", "marketplace", "update"], ["plugin", "marketplace", "upgrade"]):
@@ -474,7 +483,7 @@ class InstallerTests(unittest.TestCase):
         current = json.loads((self.home / "current.json").read_text(encoding="utf-8"))
         self.assertEqual(current["version"], "0.1.0-beta.2")
         log = "\n".join(self.mutation_log())
-        self.assertIn("plugin remove kiseki-da@kiseki-da", log)
+        self.assertNotIn("plugin remove kiseki-da@kiseki-da", log)
         self.assertIn("--ref v0.1.0-beta.2", log)
 
     def test_claude_update_uses_inventory_path_after_plain_text_install(self) -> None:

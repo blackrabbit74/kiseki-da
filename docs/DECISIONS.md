@@ -27,3 +27,9 @@
 - 理由: Claudeの既定`hooks/hooks.json`はmanifestの別hook指定でも読み込まれる。同一rootに置くとCodex起動コマンドまで実行され、未定義変数によるPython exit 2がPreToolUseをブロックする。
 - 検証: source/cache検証で別host定義と二重読込を拒否し、smokeはhost固有の環境変数だけで実hook commandを実行する。release archiveはリンクを実体化し、配布後も自己完結させる。
 - 廃止条件: 両hostが明示的な排他的hook指定を公式に保証し、実hostの回帰検証で単一rootが安全と確認された場合。
+# 2026-09-05: 稼働中cacheを保持する更新
+
+- 決定: Codexのnative installは一時homeで実行し、検証したversion付きcacheを実homeへ追加配置する。既存cacheは上書きも削除もしない。Claudeはsourceを更新してnative updateを使う。
+- 理由: Codexは`plugin remove`だけでなく`plugin add`による更新でも旧version cacheを削除する。実行中セッションの固定されたhookパスが消え、ツール全体が停止することを実CLIで確認した。
+- rollback: 新版へ切替済みのセッションも考慮し、追加配置したcacheを保持する。Claudeは元のsourceを復元してからnative updateで旧版を選び直す。Codexは既存の有効状態と旧cacheを保ったままsource/refを戻す。
+- 廃止条件: Codex native updateが稼働中の旧cache保持を保証し、実CLIの更新・rollback継続性検証が通る場合。一時stageを廃止してnative updateに統一できる。

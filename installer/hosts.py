@@ -42,7 +42,7 @@ def _executable(host: str) -> list[str]:
     return [command]
 
 
-def run_command(argv: Sequence[str]) -> subprocess.CompletedProcess[str]:
+def run_command(argv: Sequence[str], *, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     timeout = int(os.environ.get("KISEKI_DA_HOST_TIMEOUT", "90"))
     values = list(map(str, argv))
     if os.name == "nt" and values and Path(values[0]).suffix.casefold() in {".cmd", ".bat"}:
@@ -57,7 +57,7 @@ def run_command(argv: Sequence[str]) -> subprocess.CompletedProcess[str]:
             encoding="utf-8",
             errors="replace",
             timeout=timeout,
-            env=os.environ.copy(),
+            env=os.environ.copy() if env is None else env,
             check=False,
         )
     except FileNotFoundError:
@@ -293,6 +293,25 @@ class HostManager:
         undo, _ = self.marketplace_add(version=old_version)
         return do, undo
 
+    def marketplace_restore(self, fingerprint: dict[str, Any] | None) -> list[str]:
+        """Restore the recorded source, including local paths and its exact ref."""
+        if not isinstance(fingerprint, dict):
+            raise InstallerError("元のmarketplace sourceを復元できません。")
+        if self.host == "codex":
+            source = fingerprint.get("source")
+        else:
+            kind = fingerprint.get("source")
+            source = fingerprint.get("path") if kind == "directory" else fingerprint.get("url", fingerprint.get("repo"))
+        if not isinstance(source, str) or not source or source.startswith("-"):
+            raise InstallerError("元のmarketplace sourceが不正です。")
+        ref = fingerprint.get("ref")
+        if self.host == "codex":
+            return self.argv("plugin", "marketplace", "add", source,
+                             *(["--ref", ref] if isinstance(ref, str) and ref else []), "--json")
+        if isinstance(ref, str) and ref and "#" not in source and not Path(source).is_absolute():
+            source += f"#{ref}"
+        return self.argv("plugin", "marketplace", "add", source, "--scope", "user")
+
     def plugin_add(self) -> tuple[list[str], list[str]]:
         selector = f"{PLUGIN_ID}@{MARKETPLACE_ID}"
         if self.host == "claude-code":
@@ -314,6 +333,31 @@ class HostManager:
             do = self.argv("plugin", "remove", selector, "--json")
             undo = self.argv("plugin", "add", selector, "--json")
         return do, undo
+
+    def plugin_update(self) -> list[str]:
+        if self.host != "claude-code":
+            raise InstallerError("Codex更新は既存cacheを保護するstaging経路を使います。")
+        return self.argv("plugin", "update", f"{PLUGIN_ID}@{MARKETPLACE_ID}", "--scope", "user", "--yes")
+
+    def stage_codex_plugin(self, source: Path, stage_home: Path, version: str) -> Path:
+        """Run destructive native cache maintenance only in a fresh staging home."""
+        if self.host != "codex":
+            raise InstallerError("Codex stagingに別hostが指定されました。")
+        stage_home.mkdir(parents=True, exist_ok=False)
+        env = os.environ.copy()
+        env["CODEX_HOME"] = str(stage_home)
+        commands = [
+            self.argv("plugin", "marketplace", "add", str(source), "--json"),
+            self.argv("plugin", "add", f"{PLUGIN_ID}@{MARKETPLACE_ID}", "--json"),
+        ]
+        for argv in commands:
+            result = run_command(argv, env=env)
+            if result.returncode != 0:
+                raise InstallerError(f"Codex stagingに失敗しました: {result.stderr or result.stdout}")
+        cached = stage_home / "plugins" / "cache" / MARKETPLACE_ID / PLUGIN_ID / version
+        if not cached.is_dir():
+            raise InstallerError("Codex stagingのversion付きcacheがありません。")
+        return cached
 
 
 def expand_hosts(value: str | list[str] | tuple[str, ...]) -> list[str]:
