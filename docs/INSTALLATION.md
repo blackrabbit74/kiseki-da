@@ -6,7 +6,7 @@
 - CodexのMacアプリ、またはClaude Code / Codexのlocal CLI
 - GitHubへ接続できること（clone、install、update時）
 
-`v0.1.0-beta.5`の対応対象はmacOS localです。Linux localはbeta利用中に検証を続けます。Windows 11 nativeとWSL2は検証待ちのため対応対象外です。将来検証用コードが含まれていても、動作保証を意味しません。
+`v0.1.0-beta.6`の対応対象はmacOS localです。Linux localはbeta利用中に検証を続けます。Windows 11 nativeとWSL2は検証待ちのため対応対象外です。将来検証用コードが含まれていても、動作保証を意味しません。
 
 ## Codexアプリだけを使っている場合
 
@@ -26,8 +26,8 @@ KISEKI_DA_CODEX_COMMAND='"/アプリの保存先/ChatGPT.app/Contents/Resources/
 `codex のCLIが見つかりません` と表示されたbeta.1からやり直す場合、同じcloneの中で次を実行します。公開タグを指定したcloneの `detached HEAD` 表示は、このインストール用途では問題ありません。手元に編集がある場合は退避してから切り替えてください。
 
 ```bash
-git fetch origin tag v0.1.0-beta.5
-git switch --detach v0.1.0-beta.5
+git fetch origin tag v0.1.0-beta.6
+git switch --detach v0.1.0-beta.6
 python3 install.py install --host codex --scope user
 ```
 
@@ -35,10 +35,10 @@ python3 install.py install --host codex --scope user
 
 ## 導入
 
-GitHub ReleasesからZIPと`SHA256SUMS`を別々に保存し、SHA-256を照合してから展開します。macOS/Linuxは`shasum -a 256 kiseki-da-0.1.0-beta.5.zip`の結果を`SHA256SUMS`と比較します。downloadしたscriptをshellへpipeして実行しません。cloneする場合は公開済みtagを指定します。
+GitHub ReleasesからZIPと`SHA256SUMS`を別々に保存し、SHA-256を照合してから展開します。macOS/Linuxは`shasum -a 256 kiseki-da-0.1.0-beta.6.zip`の結果を`SHA256SUMS`と比較します。downloadしたscriptをshellへpipeして実行しません。cloneする場合は公開済みtagを指定します。
 
 ```bash
-git clone --branch v0.1.0-beta.5 --depth 1 https://github.com/blackrabbit74/kiseki-da.git
+git clone --branch v0.1.0-beta.6 --depth 1 https://github.com/blackrabbit74/kiseki-da.git
 cd kiseki-da
 python3 install.py install --dry-run
 python3 install.py install
@@ -88,10 +88,12 @@ Codexを再起動して`/hooks`を開き、Kiseki DAのhookを確認してtrust�
 
 自動更新はありません。`kiseki-da update --dry-run`で変更を確認し、`kiseki-da update`で明示更新します。`kiseki-da uninstall`はKiseki DAが所有するplugin登録とruntimeだけを外し、個人状態は保持します。
 
-beta.5以降の更新は、実行中のセッションが参照する旧hook cacheを削除しません。Codexのnative `plugin add`は旧cacheを整理するため、一時環境で新版cacheを作り、実環境へ追加配置してから参照tagを更新します。Claudeはnative `plugin update`を使用します。更新やrollbackの途中で新しく開始したセッションも保護するため、追加配置したcacheはrollbackでも残します。同じversionの内容が異なる場合は上書きせず停止します。
+beta.5以降の更新は、実行中のセッションが参照する旧hook cacheを削除しません。Codexのnative `plugin add`は旧cacheを整理するため、一時環境で新版cacheを作り、実環境へ追加配置してから参照tagを更新します。Claudeは旧cacheを保持するmarketplace再登録とplugin installを使用します。更新やrollbackの途中で新しく開始したセッションも保護するため、追加配置したcacheはrollbackでも残します。同じversionの内容が異なる場合は上書きせず停止します。
 
 既存セッションは旧版のまま継続できます。新版の挙動を使うときは新規セッションへ切り替えてください。Claudeによる古いcacheの期限付き整理や、利用者がnative CLIから直接行う削除はhostの管理範囲です。
 
-開発用の実host検証は`python3 acceptance/live_update_smoke.py`で行えます。Claude/Codex CLIが必要です。設定と状態を一時ディレクトリへ分離し、モデルを呼ばずに更新・rollbackと旧hookファイルの継続性を検査します。
+開発用の実host検証は`python3 acceptance/live_update_smoke.py`で行えます。Claude/Codex CLIが必要です。設定と状態を一時ディレクトリへ分離し、モデルを呼ばずに更新・rollbackと旧hookファイルの継続性を検査します。`--remote`を付けるとGitHubの公開済みタグで参照変更も検証します。
 
 Claude/Codexが異常終了して複数session markerが残った場合、Kiseki DAは混線防止のためSID省略commandを拒否します。`kiseki-da session list`で確認し、終了済みと判断できるmarkerだけを`kiseki-da session clear <session-id> --yes`で明示解除します。
+
+Codexの休止版は`KISEKI_DA_HOME/retained-plugin-caches/codex/`へ保持し、元のcache pathをその保持先へのリンクにします。使用版だけを通常のディレクトリとして残すことで、rollback後に新しいcacheが誤選択されることを防ぎます。切替にはmacOS/Linuxのatomic exchangeが必要で、非対応のファイルシステムではcacheを変更する前に停止します。

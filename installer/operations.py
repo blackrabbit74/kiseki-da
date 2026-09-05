@@ -17,6 +17,7 @@ from typing import Any, Callable
 from .constants import HOSTS, MARKETPLACE_ID, PLUGIN_ID, PRODUCT, SOURCE_ROOT, VERSION
 from .hosts import HostManager, expand_hosts, run_command
 from . import security as host_security_mod
+from .cache import check_exchange, select_cache
 from .transaction import Transaction, active_transactions, rollback_saved
 from .util import (
     InstallerError,
@@ -517,22 +518,29 @@ def _manager_steps(
         raise InstallerError(f"{manager.host} pluginは無効です。hostで有効化してから更新してください。")
     if live_update and manager.host == "codex":
         # Native `plugin add` also prunes old caches. Never run it in the live home.
+        codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser().resolve()
+        destination = codex_home / "plugins" / "cache" / MARKETPLACE_ID / PLUGIN_ID / new_version
+        retained = tx.home / "retained-plugin-caches" / "codex"
+        check_exchange(destination.parent)
+        previous_cache = ownership.get("installed_path")
+        if not isinstance(previous_cache, str):
+            raise InstallerError("稼働中のCodex cacheを確認できません。")
+        tx.on_rollback([sys.executable, str(source / "installer/cache.py"), previous_cache, str(retained)])
         with tempfile.TemporaryDirectory(prefix="kiseki-codex-stage-") as raw:
             cached = manager.stage_codex_plugin(source, Path(raw).resolve() / "home", new_version)
             _validate_installed_plugin(cached, "codex", new_version)
-            codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser().resolve()
-            destination = codex_home / "plugins" / "cache" / MARKETPLACE_ID / PLUGIN_ID / new_version
-            tx.retain_external_tree(cached, destination)
+            if destination.is_symlink():
+                if Transaction._signature(cached) != Transaction._signature(destination.resolve()):
+                    raise InstallerError("保存済みversion cacheの内容が一致しません。")
+            else:
+                tx.retain_external_tree(cached, destination)
+            select_cache(destination, retained)
             result_ownership["installed_path"] = str(destination)
     if live_update and manager.host == "claude-code":
-        # On rollback restore the old source first, then select its cached plugin.
-        tx.on_rollback(manager.plugin_update())
-        if inventory.marketplace and ownership["marketplace"]:
-            do, _ = manager.marketplace_add(version=new_version)
-            undo = manager.marketplace_restore(inventory.marketplace_fingerprint)
-            tx.external(do, undo, manager.run)
-        tx.external(manager.plugin_update(), None, manager.run)
-    elif replacing:
+        # Marketplace removal unregisters Claude plugins but retains their caches.
+        # On rollback restore the source before registering the old plugin again.
+        tx.on_rollback(manager.plugin_add()[0])
+    if replacing:
         if inventory.marketplace and ownership["marketplace"]:
             do, undo = manager.marketplace_remove(old_version=old_version)
             undo = manager.marketplace_restore(inventory.marketplace_fingerprint)
@@ -547,7 +555,9 @@ def _manager_steps(
         do, undo = manager.plugin_remove()
         tx.external(do, undo, manager.run)
         inventory = manager.inventory()
-    if not live_update and (not inventory.plugin or not inventory.plugin_enabled or replacing):
+    if live_update and manager.host == "claude-code":
+        tx.external(manager.plugin_add()[0], None, manager.run)
+    elif not live_update and (not inventory.plugin or not inventory.plugin_enabled or replacing):
         do, undo = manager.plugin_add()
         installed = tx.external(do, undo, manager.run)
         installed_path = _manager_installed_path(installed)
@@ -670,6 +680,17 @@ def _install_action_plan(inventory, ownership: dict[str, Any], replacing: bool) 
     return actions
 
 
+def _same_owned_source(saved: object, current: object, version: object) -> bool:
+    if not isinstance(saved, dict) or not isinstance(current, dict):
+        return False
+    if saved == current:
+        return True
+    # Older Codex inventories omitted refs. Accept only the recorded version's tag.
+    return (isinstance(version, str) and bool(version) and saved.get("sourceType") == "git" and "ref" not in saved
+            and current.get("ref") == f"v{version}"
+            and {key: value for key, value in current.items() if key != "ref"} == saved)
+
+
 def _host_ownership(
     old: dict[str, Any], previous_hosts: list[str], host: str, inventory, new_version: str,
 ) -> dict[str, Any]:
@@ -682,7 +703,7 @@ def _host_ownership(
         plugin_owned = bool(record.get("plugin", True)) if isinstance(record, dict) else True
         if marketplace_owned and inventory.marketplace:
             recorded_source = record.get("marketplace_fingerprint") if isinstance(record, dict) else None
-            if not recorded_source or recorded_source != inventory.marketplace_fingerprint:
+            if not _same_owned_source(recorded_source, inventory.marketplace_fingerprint, old.get("version")):
                 raise InstallerError(
                     f"{host} marketplaceの供給元/refが導入時記録と一致しません。自動変更しません。"
                 )
@@ -1082,7 +1103,8 @@ def uninstall(
         if not isinstance(ownership, dict):
             ownership = {"marketplace": True, "plugin": True}
         if (inventory.marketplace and ownership.get("marketplace") is True
-                and ownership.get("marketplace_fingerprint") != inventory.marketplace_fingerprint):
+                and not _same_owned_source(ownership.get("marketplace_fingerprint"),
+                                           inventory.marketplace_fingerprint, old.get("version"))):
             raise InstallerError(f"{host} marketplaceの供給元/refが導入時記録と一致しません。自動削除しません。")
         actions = []
         actions.append("owned pluginを削除" if inventory.plugin and ownership.get("plugin") else "pluginを保持/対象なし")
@@ -1242,7 +1264,8 @@ def doctor() -> tuple[int, dict[str, Any]]:
             ownership = ownerships.get(host) if isinstance(ownerships.get(host), dict) else {}
             installed_path = ownership.get("installed_path")
             version_ok = inventory.plugin_version in {None, metadata.get("version")}
-            marketplace_ok = (ownership.get("marketplace_fingerprint") == inventory.marketplace_fingerprint
+            marketplace_ok = (_same_owned_source(ownership.get("marketplace_fingerprint"),
+                                                  inventory.marketplace_fingerprint, metadata.get("version"))
                               if ownership.get("marketplace") is True else True)
             host_ok = inventory.plugin and inventory.plugin_enabled and version_ok and marketplace_ok
             plugin_detail = info["version"] + (f" ({installed_path})" if installed_path else "")

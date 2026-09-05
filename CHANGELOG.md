@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0-beta.6 - 2026-09-05
+
+- Git marketplaceの参照タグ変更を、Claudeのsource宣言と矛盾しない再登録手順へ修正。旧cacheは保持する。
+- Codexの一覧が省略するrefを設定から補完し、rollback時に元のGitタグを正確に復元する。
+- Codexの使用版を明示するため、休止版を保持領域へのリンクに切り替える。ディレクトリとリンクはatomic exchangeし、稼働中hookのパスを途切れさせない。
+- ローカルsourceと実GitHubタグの両方で、更新・rollback後の使用版と旧hook継続性を検証する。
+
 ## 0.1.0-beta.5 - 2026-09-05
 
 - 更新時に稼働中の旧hook cacheを保持するよう修正。Codexは隔離したnative installで作った新版cacheを追加配置し、Claudeはcacheを保持するnative updateを使う。

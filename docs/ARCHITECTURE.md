@@ -29,6 +29,7 @@ KISEKI_DA_HOME（既定 ~/.kiseki-da）
   ├─ projects.json
   ├─ projects/<uuid>/{profile.toml,events.jsonl,candidates.jsonl,tasks/}
   ├─ runtime/<version>/
+  ├─ retained-plugin-caches/codex/<version>/
   ├─ transactions/<id>/{journal.json,backups/}
   ├─ security-backups/<host>/
   ├─ install/codex-hook-trust.json

@@ -33,3 +33,9 @@
 - 理由: Codexは`plugin remove`だけでなく`plugin add`による更新でも旧version cacheを削除する。実行中セッションの固定されたhookパスが消え、ツール全体が停止することを実CLIで確認した。
 - rollback: 新版へ切替済みのセッションも考慮し、追加配置したcacheを保持する。Claudeは元のsourceを復元してからnative updateで旧版を選び直す。Codexは既存の有効状態と旧cacheを保ったままsource/refを戻す。
 - 廃止条件: Codex native updateが稼働中の旧cache保持を保証し、実CLIの更新・rollback継続性検証が通る場合。一時stageを廃止してnative updateに統一できる。
+# 2026-09-05: cacheの保持と使用版の選択を分離
+
+- 追加決定: Codexの非使用版は保持領域へ複製し、元のversion pathをその内容へのリンクとatomic exchangeする。使用版だけを通常のディレクトリにする。
+- 根拠: 複数の実ディレクトリを残すと、source/refを戻してもCLIが新しいcacheを選ぶ。リンクは使用版候補に含まれず、既存のhook pathとしては解決できることを実CLIで確認した。
+- ClaudeのGit source変更: 宣言済みrefの上書きは拒否されるため、cacheを保持するmarketplace再登録とplugin installを使う。rollbackもsourceを戻してからpluginを登録する。
+- 検証: ローカルsourceと公開済みGitHubタグで、使用版・cache本体・更新中の継続読取・更新後の旧hook実行を確認する。非対応FSでは切替前のprobeで停止する。

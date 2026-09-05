@@ -6,19 +6,25 @@ All host configuration and state use temporary directories. No model is called.
 from pathlib import Path
 import json
 import hashlib
+import argparse
 import os
 import shlex
 import sys
+import subprocess
 import threading
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from installer.hosts import _executable
+from installer.operations import _smoke_installed_plugins
 from tests.test_installer import InstallerTests
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--remote", action="store_true", help="公開済みGitタグbeta.4/beta.5で参照変更とrollbackを検証")
+    args = parser.parse_args()
     fixture = InstallerTests()
     fixture.setUp()
     stop = threading.Event()
@@ -34,7 +40,12 @@ def main() -> int:
                                ("claude-code", "KISEKI_DA_CLAUDE_COMMAND")):
             fixture.env[variable] = shlex.join(_executable(host))
         Path(fixture.env["CODEX_HOME"]).mkdir(parents=True)
-        fixture.env["KISEKI_DA_MARKETPLACE_SOURCE"] = str(fixture.source)
+        fixture.env.pop("KISEKI_DA_MARKETPLACE_SOURCE", None)
+        if args.remote:
+            fixture.source = fixture.base / "remote-start"
+            fixture._make_source(fixture.source, "0.1.0-beta.4")
+        else:
+            fixture.env["KISEKI_DA_MARKETPLACE_SOURCE"] = str(fixture.source)
         result = fixture.install("all")
         assert result.returncode == 0, result.stderr + result.stdout
 
@@ -58,20 +69,34 @@ def main() -> int:
         watcher = threading.Thread(target=watch)
         watcher.start()
 
-        for version, fail in (("0.1.0-beta.2", False), ("0.1.0-beta.3", True)):
+        cases = (("0.1.0-beta.5", False), ("0.1.0-beta.4", True)) if args.remote else (
+            ("0.1.0-beta.2", False), ("0.1.0-beta.3", True))
+        expected_version = cases[0][0]
+        for version, fail in cases:
             source = fixture.base / version
             fixture._make_source(source, version)
             if fail:
-                # Fail after both native managers have switched, during installed smoke.
-                (source / "plugins/kiseki-da/scripts/hook_entry.py").write_text("raise SystemExit(13)\n")
-                (source / "plugins/claude-code/kiseki-da/scripts/hook_entry.py").write_text("raise SystemExit(13)\n")
-            env = dict(fixture.env, KISEKI_DA_MARKETPLACE_SOURCE=str(source))
-            result = fixture.run_cli("update", "--yes", "--source", str(source), env=env)
+                # Fail after both native managers switch without corrupting any cached hook.
+                operations = source / "installer/operations.py"
+                needle = 'def _smoke_installed_plugins(host_ownership: dict[str, dict[str, Any]], version: str) -> None:\n'
+                text = operations.read_text()
+                assert needle in text
+                operations.write_text(text.replace(needle, needle + '    raise InstallerError("native rollback probe")\n', 1))
+            env = dict(fixture.env)
+            if not args.remote:
+                env["KISEKI_DA_MARKETPLACE_SOURCE"] = str(source)
+            result = subprocess.run([sys.executable, str(source / "install.py"), "update", "--yes",
+                                     "--source", str(source)], env=env, text=True, capture_output=True, timeout=180)
             assert result.returncode == (2 if fail else 0), result.stderr + result.stdout
             if fail:
                 assert "status: rolled_back" in result.stdout, result.stderr + result.stdout
             metadata = snapshot()
-            assert metadata["version"] == "0.1.0-beta.2", metadata
+            assert metadata["version"] == expected_version, metadata
+            for host, variable in (("codex", "KISEKI_DA_CODEX_COMMAND"), ("claude-code", "KISEKI_DA_CLAUDE_COMMAND")):
+                data = json.loads(subprocess.check_output([*shlex.split(env[variable]), "plugin", "list", "--json"], env=env, text=True))
+                rows = data if isinstance(data, list) else data["installed"]
+                entry = next(row for row in rows if "kiseki-da" in str(row.get("id", row.get("pluginId", ""))))
+                assert entry["version"] == expected_version, (host, entry)
             for cache, signature in tracked.items():
                 actual = contents(cache)
                 changed = [name for name in set(actual) | set(signature)
@@ -81,7 +106,12 @@ def main() -> int:
         stop.set()
         watcher.join()
         assert not missing, missing[:3]
-        print("PASS: both hosts; old hooks continuously readable; plugin contents unchanged", flush=True)
+        for cache in tracked:
+            host = "codex" if (cache / ".codex-plugin/plugin.json").is_file() else "claude-code"
+            manifest = cache / (".codex-plugin" if host == "codex" else ".claude-plugin") / "plugin.json"
+            version = json.loads(manifest.read_text())["version"]
+            _smoke_installed_plugins({host: {"installed_path": str(cache)}}, version)
+        print("PASS: both hosts; old hooks continuously readable and executable; plugin contents unchanged", flush=True)
         return 0
     finally:
         stop.set()

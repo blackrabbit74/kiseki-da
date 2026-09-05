@@ -8,6 +8,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
@@ -162,6 +163,22 @@ def _claude_user_marketplace() -> dict[str, Any] | None:
     return _fingerprint(entry.get("source")) if isinstance(entry, dict) else None
 
 
+def _codex_source_with_ref(source: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Some CLI inventories omit the configured Git ref."""
+    if not source:
+        return source
+    path = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "config.toml"
+    try:
+        row = tomllib.loads(path.read_text(encoding="utf-8")).get("marketplaces", {}).get(MARKETPLACE_ID, {})
+    except (OSError, ValueError):
+        return source
+    if (isinstance(row, dict) and row.get("source") == source.get("source")
+            and row.get("source_type") == source.get("sourceType")
+            and isinstance(row.get("ref"), str)):
+        return {**source, "ref": row["ref"]}
+    return source
+
+
 class HostManager:
     def __init__(self, host: str):
         if host not in MIN_VERSIONS:
@@ -250,6 +267,8 @@ class HostManager:
         marketplace_present = claude_source is not None if self.host == "claude-code" else market is not None
         marketplace_fingerprint = (claude_source if self.host == "claude-code" else
                                    _fingerprint(market.get("marketplaceSource")) if market else None)
+        if self.host == "codex":
+            marketplace_fingerprint = _codex_source_with_ref(marketplace_fingerprint)
         plugin = next((row for row in installed if _plugin_match(row)
                        and (self.host != "claude-code" or row.get("scope", "user") == "user")
                        and row.get("installed", True) is not False), None)
@@ -333,11 +352,6 @@ class HostManager:
             do = self.argv("plugin", "remove", selector, "--json")
             undo = self.argv("plugin", "add", selector, "--json")
         return do, undo
-
-    def plugin_update(self) -> list[str]:
-        if self.host != "claude-code":
-            raise InstallerError("Codex更新は既存cacheを保護するstaging経路を使います。")
-        return self.argv("plugin", "update", f"{PLUGIN_ID}@{MARKETPLACE_ID}", "--scope", "user", "--yes")
 
     def stage_codex_plugin(self, source: Path, stage_home: Path, version: str) -> Path:
         """Run destructive native cache maintenance only in a fresh staging home."""
