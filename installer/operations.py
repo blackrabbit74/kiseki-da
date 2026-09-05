@@ -541,7 +541,8 @@ def _manager_steps(
         raise InstallerError(f"{manager.host}で{PLUGIN_ID}の導入を確認できません。")
     if after.plugin_version is not None and after.plugin_version != new_version:
         raise InstallerError(f"{manager.host}のplugin versionが不一致です: {after.plugin_version} != {new_version}")
-    if not result_ownership.get("installed_path") and manager.host == "claude-code" and after.plugin_path:
+    # Claude's install output is plain text; inventory is authoritative after reinstall.
+    if manager.host == "claude-code" and after.plugin_path:
         result_ownership["installed_path"] = after.plugin_path
     if not after.marketplace_fingerprint:
         raise InstallerError(f"{manager.host} marketplaceの供給元をinventoryから確認できません。")

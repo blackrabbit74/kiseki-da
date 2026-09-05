@@ -140,7 +140,9 @@ state_path.parent.mkdir(parents=True, exist_ok=True)
 state_path.write_text(json.dumps(state), encoding="utf-8")
 if len(args) >= 2 and args[:2] in (["plugin", "install"], ["plugin", "add"]):
     plugin_path = os.environ.get("FAKE_PLUGIN_PATH")
-    if plugin_path:
+    if host == "claude-code":
+        print("Successfully installed plugin: kiseki-da@kiseki-da")
+    elif plugin_path:
         print(json.dumps({"installedPath": plugin_path}))
 '''
 
@@ -474,6 +476,20 @@ class InstallerTests(unittest.TestCase):
         log = "\n".join(self.mutation_log())
         self.assertIn("plugin remove kiseki-da@kiseki-da", log)
         self.assertIn("--ref v0.1.0-beta.2", log)
+
+    def test_claude_update_uses_inventory_path_after_plain_text_install(self) -> None:
+        installed = self.install("claude-code")
+        self.assertEqual(installed.returncode, 0, installed.stderr + installed.stdout)
+        newer = self.base / "new-claude-source"
+        self._make_source(newer, "0.1.0-beta.2")
+        env = dict(self.env)
+        env["FAKE_PLUGIN_PATH"] = str(newer / "plugins" / "kiseki-da")
+        result = self.run_cli("update", "--yes", "--source", str(newer), env=env)
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        metadata = json.loads((self.home / "install.json").read_text())
+        self.assertEqual(metadata["host_ownership"]["claude-code"]["installed_path"],
+                         str((newer / "plugins" / "claude-code" / "kiseki-da").resolve()))
+        self.assertEqual(metadata["version"], "0.1.0-beta.2")
 
     def test_update_dry_run_does_not_open_network(self) -> None:
         self.assertEqual(self.install("codex").returncode, 0)

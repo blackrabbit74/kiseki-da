@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-beta.4 - 2026-09-05
+
+- Claude native installがplain textを返す環境でも、更新後のinventoryから新しいcache pathを取得するよう修正。旧cacheを検証して更新がrollbackされる問題を解消。
+
 ## 0.1.0-beta.3 - 2026-09-05
 
 - ClaudeとCodexのplugin rootを分離し、ClaudeがCodex用hookを二重読込してツール実行をブロックする障害を修正。
