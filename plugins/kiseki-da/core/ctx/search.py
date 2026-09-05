@@ -190,6 +190,8 @@ def _profile_docs(store: Store) -> list[_Doc]:
         for item in profile.get(section) or []:
             if not isinstance(item, dict):
                 continue
+            if item.get("scope", "global") != "global" and item.get("workspace") != store.workspace():
+                continue
             review_by = _to_date(item.get("review_by"))
             recorded = item.get("recorded_at")
             docs.append(_Doc(id=f"profile:{_text(item.get('id'))}", kind="profile",

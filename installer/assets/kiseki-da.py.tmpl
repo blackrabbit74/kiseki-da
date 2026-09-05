@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import os
 import sys
+
+sys.dont_write_bytecode = True
 from pathlib import Path
 
 home = Path(os.environ.get("KISEKI_DA_HOME", Path(__file__).resolve().parent.parent)).expanduser().resolve()

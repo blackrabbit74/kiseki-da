@@ -57,6 +57,18 @@
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/scripts/hook_entry.py\" user-input codex",
+            "commandWindows": "py -3 \"${PLUGIN_ROOT}/scripts/hook_entry.py\" user-input codex",
+            "additionalContextLimit": 10000
+          }
+        ]
+      }
     ]
   }
 }

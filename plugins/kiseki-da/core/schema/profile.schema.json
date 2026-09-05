@@ -4,63 +4,223 @@
   "title": "Kiseki DA profile.toml",
   "description": "KISEKI_DA_HOME/profile.toml schema. Schema 1 remains readable; explicit persona save migrates to schema 2.",
   "type": "object",
-  "required": ["schema", "identity", "da"],
+  "required": [
+    "schema",
+    "identity",
+    "da"
+  ],
   "properties": {
-    "schema": {"type": "integer", "enum": [1, 2]},
+    "schema": {
+      "type": "integer",
+      "enum": [
+        1,
+        2
+      ]
+    },
     "identity": {
       "type": "object",
       "properties": {
-        "name": {"type": "string"},
-        "timezone": {"type": "string"},
-        "languages": {"type": "array", "items": {"type": "string"}}
+        "name": {
+          "type": "string"
+        },
+        "timezone": {
+          "type": "string"
+        },
+        "languages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       }
     },
     "da": {
       "type": "object",
       "description": "Schema 1 compatibility table.",
-      "properties": {"name": {"type": "string"}}
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      }
     },
     "persona": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "name": {"type": "string", "maxLength": 32},
-        "first_person": {"type": "string", "maxLength": 16},
-        "user_address": {"type": "string", "maxLength": 32},
-        "formality": {"type": "string", "enum": ["casual", "balanced", "formal"]},
-        "warmth": {"type": "string", "enum": ["reserved", "balanced", "warm"]},
-        "verbosity": {"type": "string", "enum": ["compact", "balanced", "detailed"]},
-        "initiative": {"type": "string", "enum": ["reactive", "balanced", "proactive"]},
-        "relationship": {"type": "string", "enum": ["neutral", "partner", "secretary", "mentor", "companion", "custom"]},
-        "custom_style": {"type": "string", "maxLength": 200}
+        "name": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "first_person": {
+          "type": "string",
+          "maxLength": 16
+        },
+        "user_address": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "formality": {
+          "type": "string",
+          "enum": [
+            "casual",
+            "balanced",
+            "formal"
+          ]
+        },
+        "warmth": {
+          "type": "string",
+          "enum": [
+            "reserved",
+            "balanced",
+            "warm"
+          ]
+        },
+        "verbosity": {
+          "type": "string",
+          "enum": [
+            "compact",
+            "balanced",
+            "detailed"
+          ]
+        },
+        "initiative": {
+          "type": "string",
+          "enum": [
+            "reactive",
+            "balanced",
+            "proactive"
+          ]
+        },
+        "relationship": {
+          "type": "string",
+          "enum": [
+            "neutral",
+            "partner",
+            "secretary",
+            "mentor",
+            "companion",
+            "custom"
+          ]
+        },
+        "custom_style": {
+          "type": "string",
+          "maxLength": 200
+        }
       }
     },
-    "constraints": {"type": "array", "items": {"$ref": "#/$defs/item"}},
-    "preferences": {"type": "array", "items": {"$ref": "#/$defs/item"}},
-    "goals": {"type": "array", "items": {"$ref": "#/$defs/item"}},
-    "facts": {"type": "array", "items": {"$ref": "#/$defs/item"}}
+    "constraints": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/item"
+      }
+    },
+    "preferences": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/item"
+      }
+    },
+    "goals": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/item"
+      }
+    },
+    "facts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/item"
+      }
+    }
   },
   "allOf": [
     {
-      "if": {"properties": {"schema": {"const": 2}}},
-      "then": {"required": ["persona"]},
-      "else": {"not": {"required": ["persona"]}}
+      "if": {
+        "properties": {
+          "schema": {
+            "const": 2
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "persona"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "persona"
+          ]
+        }
+      }
     }
   ],
   "$defs": {
     "item": {
       "type": "object",
-      "required": ["id", "text"],
+      "required": [
+        "id",
+        "text"
+      ],
       "properties": {
-        "id": {"type": "string"},
-        "text": {"type": "string"},
-        "source": {"type": "string"},
-        "recorded_at": {"type": "string", "format": "date"},
-        "confidence": {"type": "number", "minimum": 0.1, "maximum": 1.0},
-        "review_by": {"type": "string", "format": "date"},
-        "key": {"type": "string"},
-        "corrected_from": {"type": "string"},
-        "status": {"type": "string", "enum": ["active", "done", "dropped"]}
+        "id": {
+          "type": "string",
+          "description": "接頭辞 c/p/g/f ＋ 同種の最大番号＋1（例: c1, p3, g1, f2）。退役した id は再利用しない。"
+        },
+        "text": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "description": "user-stated | approved-inference | document:<ref>"
+        },
+        "recorded_at": {
+          "type": "string",
+          "format": "date",
+          "description": "YYYY-MM-DD"
+        },
+        "confidence": {
+          "type": "number",
+          "description": "0.1〜1.0。user-stated は 1.0、approved-inference は既定 0.7、document は既定 0.9。"
+        },
+        "review_by": {
+          "type": "string",
+          "format": "date",
+          "description": "YYYY-MM-DD。過ぎた項目は常駐から外れ、検索では [stale] が付く。"
+        },
+        "key": {
+          "type": "string",
+          "description": "任意の slug。同じ key の項目は衝突検出の対象。"
+        },
+        "corrected_from": {
+          "type": "string",
+          "description": "approve --supersedes で退役させた旧項目の id。"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "done",
+            "dropped"
+          ],
+          "description": "goals のみ。"
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "workspace",
+            "global"
+          ],
+          "description": "新規は workspace。global への昇格は実際の利用者発言で全案件への保存が明示された場合のみ。省略は既存の共通データとして扱う。"
+        },
+        "workspace": {
+          "type": "string"
+        },
+        "candidate_id": {
+          "type": "string",
+          "description": "承認処理の再試行で重複登録を防ぐ元候補ID。"
+        }
       }
     }
   }

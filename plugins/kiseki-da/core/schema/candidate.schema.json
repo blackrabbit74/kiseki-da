@@ -4,18 +4,81 @@
   "title": "Kiseki DA memory candidate",
   "description": "KISEKI_DA_HOME/candidates.jsonl の1行。追記のみで、同じidの行は最新が正。書込は store.append_candidate / set_candidate_status だけ。",
   "type": "object",
-  "required": ["id", "kind", "text", "source", "status", "created"],
+  "required": [
+    "id",
+    "kind",
+    "text",
+    "source",
+    "status",
+    "created"
+  ],
   "properties": {
-    "id": {"type": "string", "description": "cand-<N>"},
-    "kind": {"type": "string", "enum": ["constraint", "preference", "goal", "fact"]},
-    "text": {"type": "string", "description": "候補の本文（redact 済み）"},
-    "source": {"type": "string", "description": "user-stated | inference | document:<ref>。承認時に user-stated → user-stated/1.0、inference → approved-inference/0.7、document:<ref> → そのまま/0.9"},
-    "status": {"type": "string", "enum": ["pending", "approved", "rejected"]},
-    "created": {"type": "string", "format": "date-time", "description": "now_iso()"},
-    "quote": {"type": "string", "description": "利用者の言葉（候補の根拠）"},
-    "key": {"type": ["string", "null"], "description": "任意の slug。承認時にプロファイル項目の key になる"},
-    "reason": {"type": "string", "description": "reject --reason"},
-    "updated": {"type": "string", "format": "date-time", "description": "状態を変えた時刻"},
-    "sid": {"type": "string", "description": "候補を作ったセッション id"}
+    "id": {
+      "type": "string",
+      "description": "cand-<N>"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "constraint",
+        "preference",
+        "goal",
+        "fact"
+      ]
+    },
+    "text": {
+      "type": "string",
+      "description": "候補の本文（redact 済み）"
+    },
+    "source": {
+      "type": "string",
+      "description": "user-stated | inference | document:<ref>。承認時に user-stated → user-stated/1.0、inference → approved-inference/0.7、document:<ref> → そのまま/0.9"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "approved",
+        "rejected"
+      ]
+    },
+    "created": {
+      "type": "string",
+      "format": "date-time",
+      "description": "now_iso()"
+    },
+    "quote": {
+      "type": "string",
+      "description": "利用者の言葉（候補の根拠）"
+    },
+    "key": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "任意の slug。承認時にプロファイル項目の key になる"
+    },
+    "reason": {
+      "type": "string",
+      "description": "reject --reason"
+    },
+    "updated": {
+      "type": "string",
+      "format": "date-time",
+      "description": "状態を変えた時刻"
+    },
+    "sid": {
+      "type": "string",
+      "description": "候補を作ったセッション id"
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "workspace"
+      ]
+    },
+    "workspace": {
+      "type": "string"
+    }
   }
 }

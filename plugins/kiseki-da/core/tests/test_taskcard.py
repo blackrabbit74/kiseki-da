@@ -15,6 +15,7 @@ from unittest import mock
 
 from core.ctx import store as S
 from core.ctx import taskcard as T
+from core.ctx import evidence as E
 from core.ctx.store import Store, UserError
 
 FX = Path(__file__).resolve().parent / "fixtures"
@@ -34,10 +35,11 @@ class TaskcardTestCase(unittest.TestCase):
         return list(self.st.iter_events(types=types))
 
     def tool_call(self, tool: str, target: str, ok=True, sid: str | None = None) -> str:
-        ev = {"type": "tool_call", "tool": tool, "target": target, "ok": ok, "out_len": 0,
-              "out_hash": "e3b0c44298fc"}
-        if sid:
-            ev["sid"] = sid
+        data={'command':target} if tool=='Bash' else {'file_path':target}
+        ev={'type':'tool_call','tool':tool,'target':target,'ok':ok,'out_len':0,'out_hash':'e3b0c44298fc',
+            'cwd':self.st.workspace(),'workspace':self.st.workspace(),'request_hash':E.identity(tool,data,self.st.workspace()),
+            'tool_use_id':f'call-{len(list(self.st.iter_events()))}','effect':E.effect(tool,data)}
+        if sid: ev['sid']=sid
         return self.st.append_event(ev)
 
     def card(self, risk: str = "R1", goal: str = "認証トークンの自動更新を追加する", **kw) -> T.TaskCard:
@@ -51,6 +53,14 @@ class TaskcardTestCase(unittest.TestCase):
 # ---------------------------------------------------------------- parse / render
 
 class ParseRenderTests(unittest.TestCase):
+    def test_workspace_round_trip_preserves_legacy_format(self):
+        text = (FX / "task.sample.md").read_text(encoding="utf-8")
+        card = T.parse(text)
+        self.assertEqual(card.workspace, "")
+        self.assertEqual(T.render(card), text)
+        card.workspace = "/tmp/project with spaces"
+        self.assertEqual(T.parse(T.render(card)).workspace, card.workspace)
+
     def test_fixture_round_trip(self):
         text = (FX / "task.sample.md").read_text(encoding="utf-8")
         card = T.parse(text)
@@ -163,31 +173,27 @@ class CheckEvidenceTests(TaskcardTestCase):
         self.assertEqual(self.check("ev:s-fx-1:3", "pytest -q"), "not a tool call")  # task_open
 
     def test_tool_heads(self):
-        self.assertIsNone(self.check("ev:s-fx-1:8", "Read git diff"))  # Read tool_call
-        self.assertIsNone(self.check("ev:s-fx-1:8", "read"))
-        self.assertEqual(self.check("ev:s-fx-1:8", "grep foo"), "tool mismatch")
-        self.assertEqual(self.check("ev:s-fx-1:6", "Read git diff"), "tool mismatch")  # Bash vs Read
-        # a command-style check against a non-Bash tool is a command mismatch (no substring inference)
-        self.assertEqual(self.check("ev:s-fx-1:8", "pytest git-diff"), "command mismatch")
+        self.assertIsNone(self.check('ev:s-fx-1:8','Read /repo/git-diff.txt'))
+        for check in ('read','Read other.txt','Grep foo','pytest git-diff'):
+            self.assertEqual(self.check('ev:s-fx-1:8',check),'request mismatch')
 
     def test_command_heads(self):
-        ev_id = self.tool_call("Bash", "pytest tests/x.py")
-        self.assertIsNone(self.check(ev_id, "pytest tests/x.py -q"))
-        self.assertIsNone(self.check(ev_id, "PYTEST"))
-        self.assertEqual(self.check(ev_id, "npm test"), "command mismatch")
-        self.assertEqual(self.check(ev_id, ""), "command mismatch")
-        self.assertIsNone(self.check("ev:s-fx-1:6", "pytest tests/test_auth.py"))
-        self.assertEqual(self.check("ev:s-fx-1:6", "tests/test_auth.py"), "command mismatch")  # never substring
+        ref=self.tool_call('Bash','pytest tests/x.py')
+        self.assertIsNone(self.check(ref,'pytest tests/x.py'))
+        for check in ('pytest tests/x.py -q','PYTEST','npm test',''):
+            self.assertEqual(self.check(ref,check),'request mismatch')
+        self.assertIsNone(self.check('ev:s-fx-1:6','pytest tests/test_auth.py -q'))
 
-    def test_command_failed_and_unknown_ok(self):
-        self.assertEqual(self.check("ev:s-fx-1:7", "pytest tests/test_other.py -q"), "command failed")
-        self.assertEqual(self.check("ev:s-fx-1:7", "npm test"), "command mismatch")  # mismatch wins over failed
-        ev_id = self.tool_call("Bash", "pytest -q", ok=None)
-        self.assertEqual(self.check(ev_id, "pytest -q"), "command failed")
+    def test_command_failed_and_null_ok(self):
+        self.assertEqual(self.check('ev:s-fx-1:7','pytest tests/test_other.py -q'),'command failed')
+        ref=self.tool_call('Bash','pytest -q',ok=None)
+        self.assertEqual(self.check(ref,'pytest -q'),'result unknown')
 
     def test_missing_evidence_keeps_criterion_order(self):
         shutil.copy(FX / "task.sample.md", self.st.task_path(SAMPLE_ID))
         card = T.load(self.st, SAMPLE_ID)
+        card.workspace = "/repo"
+        self.st.set_workspace("/repo")
         self.assertEqual([(c.id, r) for c, r in T.missing_evidence(self.st, card)], [("C2", "no evidence")])
         card.criteria[0].evidence = "ev:s-fx-1:7"
         self.assertEqual([(c.id, r) for c, r in T.missing_evidence(self.st, card)],
@@ -199,7 +205,7 @@ class CheckEvidenceTests(TaskcardTestCase):
 class CardEditTests(TaskcardTestCase):
     def test_add_criterion_numbering(self):
         card = self.card()
-        c1 = T.add_criterion(self.st, card, "更新処理の単体テストが通る", "pytest tests/test_auth.py")
+        c1 = T.add_criterion(self.st, card, "更新処理の単体テストが通る", "pytest tests/test_auth.py -q")
         self.assertEqual((c1.id, c1.evidence, c1.status), ("C1", "-", "open"))
         c2 = T.add_criterion(self.st, card, " 回帰がない ", " pytest -q ")
         self.assertEqual((c2.id, c2.claim, c2.check), ("C2", "回帰がない", "pytest -q"))
@@ -220,19 +226,13 @@ class CardEditTests(TaskcardTestCase):
         self.assertEqual(T.add_criterion(self.st, card, "e", "f").id, "C6")
 
     def test_set_status_and_risk(self):
-        card = self.card()
-        T.set_status(self.st, card, "deferred")
-        T.set_risk(self.st, card, "R2")
-        loaded = T.load(self.st, card.id)
-        self.assertEqual((loaded.status, loaded.risk), ("deferred", "R2"))
-        ups = self.events({"task_update"})
-        self.assertEqual([e["changed"] for e in ups], [["status:deferred"], ["risk:R2"]])
-        self.assertEqual((ups[-1]["status"], ups[-1]["risk"]), ("deferred", "R2"))
-        with self.assertRaises(UserError):
-            T.set_status(self.st, card, "closed")
-        with self.assertRaises(UserError):
-            T.set_risk(self.st, card, "R4")
-        self.assertEqual(len(self.events({"task_update"})), 2)
+        card=self.card()
+        with self.assertRaises(UserError): T.set_status(self.st,card,'deferred')
+        T.defer(self.st,card,'未検証のため')
+        T.set_risk(self.st,card,'R2')
+        with self.assertRaises(UserError): T.set_risk(self.st,card,'R1')
+        self.assertEqual(T.load(self.st,card.id).risk,'R2')
+        self.assertEqual(T.load(self.st,card.id).status,'deferred')
 
     def test_assumption_question_decision_note(self):
         card = self.card()
@@ -268,22 +268,17 @@ class CardEditTests(TaskcardTestCase):
 
 class EvidenceTests(TaskcardTestCase):
     def test_last_prefers_effective_sid_then_falls_back(self):
-        card = self.card()
-        T.add_criterion(self.st, card, "a", "pytest -q")
-        with self.assertRaises(UserError) as cm:
-            T.set_evidence(self.st, card, "C1", "last")
-        self.assertEqual(str(cm.exception), "参照できるツール証拠がありません")
-        other = self.tool_call("Bash", "pytest -q", sid="s-other")
-        self.assertEqual(other, "ev:s-other:1")
-        self.assertEqual(T.set_evidence(self.st, card, "C1", "last"), other)  # no s-test tool_call → fallback
-        mine = self.tool_call("Bash", "pytest -q")
-        self.tool_call("Bash", "ls", sid="s-other")  # newer, but in another sid
-        self.assertEqual(T.set_evidence(self.st, card, "C1", "last"), mine)
-        self.assertEqual(T.load(self.st, card.id).criteria[0].evidence, mine)
+        card=self.card()
+        T.add_criterion(self.st,card,'a','pytest -q')
+        self.tool_call('Bash','pytest -q',sid='other')
+        with self.assertRaises(UserError): T.set_evidence(self.st,card,'C1','last')
+        mine=self.tool_call('Bash','pytest -q')
+        self.tool_call('Bash','pytest -q',sid='other')
+        self.assertEqual(T.set_evidence(self.st,card,'C1','last'),mine)
 
     def test_last_tool_picks_latest_matching(self):
         card = self.card()
-        T.add_criterion(self.st, card, "a", "Read git diff")
+        T.add_criterion(self.st, card, "a", "Read /repo/git-diff.txt")
         self.tool_call("Read", "/repo/a.py")
         r2 = self.tool_call("Read", "/repo/b.py")
         b = self.tool_call("Bash", "git diff")
@@ -293,9 +288,10 @@ class EvidenceTests(TaskcardTestCase):
         self.assertEqual(T.set_evidence(self.st, card, "C1", "last"), b)
         with self.assertRaises(UserError) as cm:
             T.set_evidence(self.st, card, "C1", "last:Write")
-        self.assertEqual(str(cm.exception), "参照できるツール証拠がありません")
+        self.assertIn("このセッション", str(cm.exception))
         w = self.tool_call("Write", "/repo/c.py", sid="s-other")
-        self.assertEqual(T.set_evidence(self.st, card, "C1", "last:Write"), w)  # fallback per tool
+        with self.assertRaises(UserError):
+            T.set_evidence(self.st, card, "C1", "last:Write")
 
     def test_last_skips_unknown_status_wrapper_event(self):
         card = self.card()
@@ -359,12 +355,12 @@ class CloseDeferTests(TaskcardTestCase):
 
     def test_close_refused_writes_nothing(self):
         card = self.card()
-        T.add_criterion(self.st, card, "更新処理の単体テストが通る", "pytest tests/test_auth.py")
+        T.add_criterion(self.st, card, "更新処理の単体テストが通る", "pytest tests/test_auth.py -q")
         before = self.snapshot(card)
         self.assertEqual(T.close(self.st, card), ["C1: no evidence"])
         self.assertEqual(self.snapshot(card), before)
         self.assertEqual((card.status, card.criteria[0].status), ("open", "open"))
-        T.add_criterion(self.st, card, "差分を読み返した", "Read git diff")
+        T.add_criterion(self.st, card, "差分を読み返した", "Read /repo/git-diff.txt")
         self.tool_call("Bash", "pytest tests/test_auth.py -q")
         T.set_evidence(self.st, card, "C1", "last")
         card.criteria[1].evidence = "ev:s-test:99"
@@ -374,8 +370,8 @@ class CloseDeferTests(TaskcardTestCase):
 
     def test_close_success(self):
         card = self.card()
-        T.add_criterion(self.st, card, "単体テストが通る", "pytest tests/test_auth.py")
-        T.add_criterion(self.st, card, "差分を読み返した", "Read git diff")
+        T.add_criterion(self.st, card, "単体テストが通る", "pytest tests/test_auth.py -q")
+        T.add_criterion(self.st, card, "差分を読み返した", "Read /repo/git-diff.txt")
         self.tool_call("Bash", "pytest tests/test_auth.py -q")
         T.set_evidence(self.st, card, "C1", "last")
         self.tool_call("Read", "/repo/git-diff.txt")
@@ -397,6 +393,8 @@ class CloseDeferTests(TaskcardTestCase):
         shutil.copy(FX / "events.sample.jsonl", self.st.events_path)
         shutil.copy(FX / "task.sample.md", self.st.task_path(SAMPLE_ID))
         card = T.load(self.st, SAMPLE_ID)
+        card.workspace = "/repo"
+        self.st.set_workspace("/repo")
         self.assertEqual(T.close(self.st, card), ["C2: no evidence"])
         T.set_evidence(self.st, card, "C2", "ev:s-fx-1:7")  # failed pytest run
         self.assertEqual(T.close(self.st, card), ["C2: command failed"])
@@ -421,7 +419,7 @@ class CloseDeferTests(TaskcardTestCase):
     def test_defer(self):
         card = self.card()
         T.add_criterion(self.st, card, "単体テストが通る", "pytest -q")
-        T.add_criterion(self.st, card, "差分を読み返した", "Read git diff")
+        T.add_criterion(self.st, card, "差分を読み返した", "Read /repo/git-diff.txt")
         card.criteria[0].status = "pass"
         n = len(self.events())
         with self.assertRaises(UserError):
@@ -561,11 +559,11 @@ class BriefTests(TaskcardTestCase):
     def test_review_brief_lists_criteria(self):
         card = self.card()
         T.add_criterion(self.st, card, "単体テストが通る", "pytest -q")
-        T.add_criterion(self.st, card, "差分を読み返した", "Read git diff")
+        T.add_criterion(self.st, card, "差分を読み返した", "Read /repo/git-diff.txt")
         text = T.brief(self.st, card, "review", None)
         self.assertEqual(self.headings(text), self.HEADINGS)
         scope = self.section(text, "# 対象範囲", "# 禁止事項")
-        for word in (card.goal, "C1", "単体テストが通る", "pytest -q", "C2", "差分を読み返した", "Read git diff"):
+        for word in (card.goal, "C1", "単体テストが通る", "pytest -q", "C2", "差分を読み返した", "Read /repo/git-diff.txt"):
             self.assertIn(word, scope)
         self.assertIn("file:line", text.split("# 返却形式", 1)[1])
         ev = self.events({"worker_dispatch"})[-1]

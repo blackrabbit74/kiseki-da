@@ -387,7 +387,7 @@ class OtherEnvFixtureTestCase(HookBase):
         card = taskcard.new_card(st, "Codex string evidence must fail closed", id="codex-unknown")
         criterion = taskcard.add_criterion(st, card, "tests pass", "pytest -q")
         criterion.evidence = f"ev:{ev['sid']}:{ev['seq']}"
-        self.assertEqual(taskcard.close(st, card), ["C1: command failed"])
+        self.assertEqual(taskcard.close(st, card), ["C1: result unknown"])
 
     def test_codex_post_tool_mcp_gets_external_context(self):
         hi, out, stdout, _ = self.codex("codex-post-tool-mcp.json")
@@ -574,7 +574,7 @@ class FormatOutputTestCase(HookBase):
         cx = json.loads(hooks.format_output(make_hi("codex", "pre-tool"), ask)[0])
         self.assertEqual(cx["hookSpecificOutput"]["permissionDecision"], "deny")
         self.assertEqual(cx["hookSpecificOutput"]["permissionDecisionReason"], hooks.CODEX_ASK_REASON)
-        self.assertEqual(hooks.CODEX_ASK_REASON, "R3 操作。利用者が承認したら再実行")
+        self.assertIn("task override", hooks.CODEX_ASK_REASON)
     def test_allow_is_always_empty_and_never_says_allow(self):
         allow = HookOutput(decision="allow", reason="")
         for env in ("claude-code", "codex"):

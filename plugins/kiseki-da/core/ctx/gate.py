@@ -11,6 +11,7 @@ from typing import Literal
 
 from core.ctx import store as _store
 from core.ctx import taskcard
+from core.ctx import evidence as E
 from core.ctx.store import Store, UserError
 
 # Commands that read a file's content; naming ~/.ssh, ~/.aws or a .env file as their argument is denied
@@ -101,9 +102,16 @@ def guard(tool: str, tool_input: dict, cwd: str) -> tuple[Literal["allow", "ask"
     if tool in _SHELL_TOOLS:
         raw = tool_input.get("command", "")
         command = raw if isinstance(raw, str) else ("" if raw is None else str(raw))
+        if E.ctx_command(command) == "hook":
+            return "deny", "hook はホスト専用の入口です。利用者発言やツール証拠をモデルから作成しないでください"
         for rx, reason in _DENY_RE:
             if rx.search(command):
                 return "deny", reason
+        args = E.words(command)
+        if args and args[0] in {"rg", "grep", "egrep", "fgrep"} and E.effect(tool, tool_input) == "read":
+            return "allow", ""  # a search for 'deploy' is not a deployment
+        if E.is_ctx(command):
+            return "allow", ""  # quoted task text does not itself perform the quoted operation
         for rx, reason in _ASK_RE:
             if rx.search(command):
                 return "ask", reason
@@ -119,7 +127,13 @@ def guard(tool: str, tool_input: dict, cwd: str) -> tuple[Literal["allow", "ask"
                 return "deny", f"$KISEKI_DA_HOME（{home}）配下への書込は禁止です: {raw}"
             if path.is_relative_to(core):
                 return "deny", f"Kiseki DA の core/（{core}）配下への書込は禁止です: {raw}"
+        if tool == "Delete":
+            return "ask", "削除の対象を確認し、現在の利用者指示があれば今回の操作として記録してください"
         return "allow", ""
+    if tool.lower().startswith("mcp"):
+        action_name = re.sub(r"[_:]+", " ", tool.lower())
+        if re.search(r"\b(send|publish|deploy|delete|drop|payment|pay)\b", action_name):
+            return "ask", "外部への操作です。現在の明示指示を対象操作に結び付けてください"
     return "allow", ""
 
 

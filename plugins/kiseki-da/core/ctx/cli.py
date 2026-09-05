@@ -14,6 +14,7 @@ if __name__ == "__main__":
 
 import argparse  # noqa: E402
 import hashlib  # noqa: E402
+import contextlib  # noqa: E402
 import json  # noqa: E402
 import os  # noqa: E402
 import re  # noqa: E402
@@ -25,7 +26,7 @@ import tempfile  # noqa: E402
 from core.ctx import store as _store  # noqa: E402
 from core.ctx.store import Store, UserError, dumps, redact  # noqa: E402
 
-HOOK_EVENTS = ("session-start", "pre-tool", "post-tool", "stop", "session-end")
+HOOK_EVENTS = ("session-start", "user-input", "pre-tool", "post-tool", "stop", "session-end")
 ENVS = ("claude-code", "codex")
 SEARCH_KINDS = ("events", "tasks", "profile", "capture")
 
@@ -38,6 +39,13 @@ REASON_JA = {
     "command mismatch": "コマンドが一致しません",
     "command failed": "コマンドが失敗しています",
     "no criteria": "完了条件がありません",
+    "result unknown": "成功状態が不明です",
+    "unbound evidence": "対象・実行IDを確認できない旧形式の証拠です。検証を再実行してください",
+    "request mismatch": "検査対象または引数が一致しません",
+    "artifact changed": "証拠を取得した後に対象ファイルが変わっています",
+    "workspace mismatch": "証拠の案件が一致しません",
+    "evidence stale": "証拠の取得後に変更操作があります。再検証してください",
+    "evidence predates task": "タスク作成前の証拠です",
 }
 
 # argparse's English error texts → Japanese (BUILD_BRIEF §2: CLI text is Japanese only). Same wording on
@@ -135,6 +143,76 @@ def _make_store(args) -> Store:
 
 def _common_store(args) -> Store:
     return Store(home=_store.kiseki_da_home(), sid=getattr(args, "sid", None))
+
+
+@contextlib.contextmanager
+def _using_home(args):
+    old = os.environ.get("KISEKI_DA_HOME")
+    value = getattr(args, "home", None)
+    if value:
+        os.environ["KISEKI_DA_HOME"] = str(Path(value).expanduser().resolve())
+    try:
+        yield
+    finally:
+        if value:
+            if old is None:
+                os.environ.pop("KISEKI_DA_HOME", None)
+            else:
+                os.environ["KISEKI_DA_HOME"] = old
+
+
+def cmd_context(args) -> int:
+    from core.ctx import build
+    st = _make_store(args)
+    if args.context_command == "required":
+        required = build.required_context(st)
+        pages = required["pages"]
+    else:
+        data = st.user_input() or {} if args.context_command == "instruction" else build.scoped_profile(st)
+        text = json.dumps(data, ensure_ascii=False, indent=2, default=str)
+        pages = [text[i:i + 3500] for i in range(0, len(text), 3500)] or [""]
+    if args.page < 1 or args.page > len(pages):
+        raise UserError(f"--page は 1 から {len(pages)} の範囲で指定してください")
+    body = pages[args.page - 1]
+    if _json(args):
+        _emit_json({"page": args.page, "pages": len(pages), "text": body})
+    else:
+        _out(f"{args.page}/{len(pages)} ページ\n{body}")
+        if args.page < len(pages):
+            _out(f"続き: kiseki-da context {args.context_command} --page {args.page + 1}")
+    sys.stdout.flush()
+    if args.context_command == "required":
+        st.append_event({"type": "context_read", "content_hash": required["hash"],
+                         "page": args.page, "pages": len(pages), "workspace": st.workspace()})
+    return 0
+
+
+def cmd_policy(args) -> int:
+    path = _store.REPO_ROOT / "core/policy" / f"{args.name}.md"
+    if _json(args):
+        _emit_json({"path": str(path), "text": path.read_text(encoding="utf-8")})
+    else:
+        _out(path.read_text(encoding="utf-8"))
+    return 0
+
+
+def cmd_task_override(args) -> int:
+    from core.ctx import evidence as authority, taskcard
+    st = _make_store(args)
+    card = taskcard.load(st, args.id)
+    if args.command_text is not None:
+        tool, data = "Bash", {"command": args.command_text}
+    else:
+        tool = args.tool
+        try:
+            data = json.loads(args.tool_input)
+        except (ValueError, TypeError):
+            raise UserError("--input はツール引数の JSON オブジェクトで指定してください") from None
+        if not tool or not isinstance(data, dict):
+            raise UserError("--tool と --input を指定してください")
+    ref = authority.record_override(st, card, tool, data, args.quote)
+    _emit_json({"id": ref}) if _json(args) else _out(ref)
+    return 0
 
 
 def _parse_since(value: str) -> int:
@@ -256,7 +334,7 @@ def cmd_task_list(args) -> int:
     cards = taskcard.list_cards(_make_store(args), status)
     if _json(args):
         _emit_json([{"id": c.id, "status": c.status, "risk": c.risk, "kind": c.kind,
-                     "updated": c.updated, "goal": c.goal} for c in cards])
+                     "updated": c.updated, "goal": c.goal, "workspace": c.workspace} for c in cards])
     else:
         _out("\n".join(f"{c.id}\t{c.status}\t{c.risk}\t{c.updated}" for c in cards))
     return 0
@@ -272,6 +350,15 @@ def cmd_task_set(args) -> int:
         did = True
     if args.risk:
         taskcard.set_risk(st, card, args.risk)
+        did = True
+    if args.workspace:
+        taskcard.set_workspace(st, card, args.workspace)
+        did = True
+    for constraint in args.constraint or []:
+        taskcard.add_constraint(st, card, constraint)
+        did = True
+    if args.next_action:
+        taskcard.set_next(st, card, args.next_action)
         did = True
     for spec in args.add_criterion or []:
         claim, check = _split_criterion(spec)
@@ -295,7 +382,7 @@ def cmd_task_set(args) -> int:
         did = True
     if not did:
         raise UserError("更新内容を指定してください（--status / --risk / --add-criterion / --evidence / "
-                        "--assume / --question / --decide / --note）")
+                        "--assume / --question / --decide / --note / --workspace）")
     if _json(args):
         _emit_json(_card_dict(card))
     else:
@@ -431,8 +518,11 @@ def cmd_candidate_list(args) -> int:
 
 
 def cmd_approve(args) -> int:
-    pid = _make_store(args).approve(args.cid, confidence=args.confidence, review_by=args.review_by,
-                                    supersedes=args.supersedes)
+    from core.ctx import evidence as authority
+    st = _make_store(args)
+    authority.user_quote(st, args.quote)
+    pid = st.approve(args.cid, confidence=args.confidence, review_by=args.review_by,
+                     supersedes=args.supersedes, global_scope=args.global_scope, quote=args.quote)
     if _json(args):
         _emit_json({"id": pid})
     else:
@@ -448,7 +538,24 @@ def cmd_reject(args) -> int:
 
 
 def cmd_remember(args) -> int:
-    pid = _make_store(args).remember(args.text, kind=args.kind, key=args.key)
+    from core.ctx import evidence as authority
+    st = _make_store(args)
+    if args.from_user_input:
+        prompt = (st.user_input() or {}).get("prompt", "").strip()
+        if args.text is not None or not prompt.startswith("/remember "):
+            raise UserError("実際の /remember 発言を取得できません。本文をシェルへ埋め込まずに実行してください")
+        args.text = prompt[len("/remember "):].strip()
+        args.quote = prompt
+    if not args.text:
+        raise UserError("記憶する本文を指定してください")
+    quote = args.quote
+    if quote is None:
+        current = st.user_input() or {}
+        prompt = current.get("prompt", "").strip()
+        if prompt in {args.text.strip(), "/remember " + args.text.strip()}:
+            quote = prompt
+    authority.user_quote(st, quote)
+    pid = st.remember(args.text, kind=args.kind, key=args.key, global_scope=args.global_scope, quote=quote)
     if _json(args):
         _emit_json({"id": pid})
     else:
@@ -463,7 +570,7 @@ def cmd_report(args) -> int:
     if _json(args):
         _emit_json(data)
     else:
-        _out("\n".join(f"{k}: {v if not isinstance(v, (list, dict)) else dumps(v)}" for k, v in data.items()))
+        _out("\n".join(f"{k}: {'未計測' if v is None else v if not isinstance(v, (list, dict)) else dumps(v)}" for k, v in data.items()))
     return 0
 
 
@@ -488,7 +595,13 @@ def cmd_verify_run(args) -> int:
         stdout, stderr, returncode = "", str(exc), 127
     output = stdout + stderr
     display = subprocess.list2cmdline(command) if os.name == "nt" else shlex.join(command)
+    from core.ctx import evidence as E
+    import uuid
     store.append_event({
+        "tool_use_id": "verify-" + uuid.uuid4().hex,
+        "workspace": store.workspace(), "cwd": str(Path.cwd()),
+        "request_hash": E.identity("Bash", {"command": display}, str(Path.cwd())),
+        "effect": E.effect("Bash", {"command": display}),
         "type": "tool_call",
         "tool": "Bash",
         "target": redact(display)[:200],
@@ -918,7 +1031,8 @@ def _hook_main(argv: list[str]) -> int:
     except BaseException as e:  # noqa: BLE001 — argparse SystemExit / UserError included
         _record_hook_error(_hook_where(argv), e, payload)
         return 0
-    return cmd_hook(args, raw)
+    with _using_home(args):
+        return cmd_hook(args, raw)
 
 
 # ---------------------------------------------------------------- parser
@@ -927,6 +1041,7 @@ def _parent() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(add_help=False)
     p.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="JSON で出力する")
     p.add_argument("--sid", default=argparse.SUPPRESS, help="セッション ID（省略時は session/current）")
+    p.add_argument("--home", default=argparse.SUPPRESS, help="状態領域の絶対パス（KISEKI_DA_HOME より優先）")
     return p
 
 
@@ -1004,6 +1119,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_session_clear)
     p.add_argument("selector", help="session idまたはall")
     p.add_argument("--yes", action="store_true")
+    ctx = add("context", cmd_context, help="必要な文脈を省略せずページ単位で取得する")
+    ctx.add_argument("context_command", choices=("required", "profile", "instruction"))
+    ctx.add_argument("--page", type=int, default=1)
+    p = add("policy", cmd_policy, help="方針本文を取得する")
+    p.add_argument("policy_command", choices=("show",))
+    p.add_argument("name", choices=("interaction", "verification", "decision-support", "task-card"))
 
     p = add("search", cmd_search, help="events / tasks / profile を検索する")
     p.add_argument("query")
@@ -1031,8 +1152,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--status", default="open", help="open|done|deferred|abandoned|all")
     p = tadd("set", cmd_task_set, help="カードを更新する")
     p.add_argument("id")
-    p.add_argument("--status", choices=("open", "deferred", "abandoned"), default=None)
+    p.add_argument("--status", choices=("open", "abandoned"), default=None)
     p.add_argument("--risk", choices=("R0", "R1", "R2", "R3"), default=None)
+    p.add_argument("--workspace", default=None, help="カードの所属案件フォルダを明示して設定する")
+    p.add_argument("--constraint", action="append", help="案件の必須制約または対象外を追加する")
+    p.add_argument("--next", dest="next_action", default=None, help="次に行う作業を記録する")
     p.add_argument("--add-criterion", action="append", metavar='"<claim> :: <check>"')
     p.add_argument("--evidence", action="append", metavar="<Cn>=<ev:sid:seq>|last|last:<tool>")
     p.add_argument("--assume", default=None)
@@ -1048,6 +1172,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("id")
     p.add_argument("--role", choices=("research", "review"), required=True)
     p.add_argument("--scope", default=None)
+    p = tadd("override", cmd_task_override, help="現在の利用者指示を今回の対象操作に結び付ける")
+    p.add_argument("id")
+    p.add_argument("--quote", required=True, help="最新の利用者発言全文")
+    p.add_argument("--command", dest="command_text", default=None, help="今回だけ実行する正確なシェルコマンド")
+    p.add_argument("--tool", default=None)
+    p.add_argument("--input", dest="tool_input", default=None)
 
     p = add("log", cmd_log, help="イベントを記録する")
     p.add_argument("type")
@@ -1075,15 +1205,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--confidence", type=float, default=None)
     p.add_argument("--review-by", default=None)
     p.add_argument("--supersedes", default=None)
+    p.add_argument("--global", dest="global_scope", action="store_true", help="利用者が共通で覚えると明示した場合だけ昇格する")
+    p.add_argument("--quote", required=True, help="最新の利用者発言全文")
 
     p = add("reject", cmd_reject, help="候補を却下する")
     p.add_argument("cid")
     p.add_argument("--reason", default=None)
 
     p = add("remember", cmd_remember, help="利用者自身が profile に直接追加する")
-    p.add_argument("text")
+    p.add_argument("text", nargs="?")
+    p.add_argument("--from-user-input", action="store_true", help="/remember の実際の発言から本文を取得する")
     p.add_argument("--kind", choices=_store.CANDIDATE_KINDS, default="preference")
     p.add_argument("--key", default=None)
+    p.add_argument("--global", dest="global_scope", action="store_true", help="全案件の共通記憶に保存する（明示指示が必要）")
+    p.add_argument("--quote", default=None, help="最新の利用者発言全文")
 
     p = add("report", cmd_report, help="週次指標 / 監査")
     g = p.add_mutually_exclusive_group(required=True)
@@ -1112,11 +1247,20 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     _utf8_stdio()
     argv = list(sys.argv[1:] if argv is None else argv)
-    if argv and argv[0] == "hook":
+    leading = 0
+    while leading < len(argv):
+        if argv[leading] in ("--home", "--sid"):
+            leading += 2
+        elif argv[leading] == "--json":
+            leading += 1
+        else:
+            break
+    if leading < len(argv) and argv[leading] == "hook":
         return _hook_main(argv)
     try:
         args = build_parser().parse_args(argv)  # every subparsers action is required, so args.func is set
-        return int(args.func(args) or 0)
+        with _using_home(args):
+            return int(args.func(args) or 0)
     except UserError as e:
         _err(str(e))
         return 1

@@ -413,7 +413,9 @@ class StoreTestCase(unittest.TestCase):
         shutil.copy(FX / "profile.sample.toml", self.st.profile_path)
         cid = self.st.append_candidate({"text": "コミットメッセージは英語で書く（本文も英語）",
                                         "quote": "コミットは全部英語で", "source": "user-stated"})
-        pid = self.st.approve(cid, supersedes="p2")
+        quote = '全案件でコミットメッセージは英語で書く（本文も英語）を覚えて'
+        self.st.record_user_input(quote)
+        pid = self.st.approve(cid, supersedes="p2", global_scope=True, quote=quote)
         self.assertEqual(pid, "p6")
         prof = self.st.read_profile()
         ids = [p["id"] for p in prof["preferences"]]
@@ -444,16 +446,18 @@ class StoreTestCase(unittest.TestCase):
         with open(self.st.profile_path, "a", encoding="utf-8") as f:
             f.write('\n[[facts]]\nid = 7\ntext = "壊れた項目"\n')
         cid = self.st.append_candidate({"text": "Z", "source": "user-stated"})
+        quote = '全案件でZを覚えて'
+        self.st.record_user_input(quote)
         before = list(self.st.iter_events())
         with self.assertRaises(UserError) as cm:
-            self.st.approve(cid, supersedes="p2")
+            self.st.approve(cid, supersedes="p2", global_scope=True, quote=quote)
         self.assertIn("facts[1].id", str(cm.exception))
         self.assertFalse(self.st.archive_path.exists())
         self.assertIn("p2", [p["id"] for p in self.st.read_profile()["preferences"]])
         self.assertEqual(self.st.candidates()[0]["status"], "pending")
         self.assertEqual(list(self.st.iter_events()), before)
         shutil.copy(FX / "profile.sample.toml", self.st.profile_path)  # user fixes the profile and retries
-        self.assertEqual(self.st.approve(cid, supersedes="p2"), "p6")
+        self.assertEqual(self.st.approve(cid, supersedes="p2", global_scope=True, quote=quote), "p6")
         arch = [json.loads(l) for l in self.st.archive_path.read_text(encoding="utf-8").splitlines()]
         self.assertEqual([(a["id"], a["superseded_by"]) for a in arch], [("p2", "p6")])
         self.assertEqual([e["type"] for e in self.st.iter_events()][len(before):], ["correction", "approval"])
@@ -470,7 +474,7 @@ class StoreTestCase(unittest.TestCase):
 
     # ------------------------------------------------------------ text / tasks
     def test_writes_before_init_create_private_home(self):
-        """A hook may run before `ctx init` (fail-open). The home it creates is the private area (mode 700)."""
+        """A hook may run before `kiseki-da init` (fail-open). The home it creates is the private area (mode 700)."""
         if os.name == "nt":
             self.skipTest("POSIX mode bits are not a Windows ACL assertion")
         old = os.umask(0o022)
@@ -594,20 +598,23 @@ class ReportTestCase(unittest.TestCase):
         self.assertEqual(d["sessions"], 1)              # the 2020 one is outside the window
         self.assertEqual(d["resident_tokens_avg"], 1500.0)
         self.assertEqual(d["questions"], 2)
-        self.assertEqual(d["questions_useful_ratio"], 0.5)
+        self.assertIsNone(d["questions_useful_ratio"])
+        self.assertEqual(d["questions_followed_by_update_ratio"], 0.5)
         self.assertEqual(d["assumptions"], 1)
         self.assertEqual(d["corrections"], 1)
         self.assertEqual(d["cards_open"], 1)
         self.assertEqual(d["cards_closed"], 1)
-        self.assertEqual(d["evidence_fill_ratio"], 0.5)
+        self.assertEqual(d["evidence_fill_ratio"], 0.0)
+        self.assertEqual(d["evidence_reference_ratio"], 0.5)
         self.assertEqual(d["gate_blocks"], 2)
-        self.assertEqual(d["gate_overrides"], 0.5)
+        self.assertIsNone(d["gate_overrides"])
+        self.assertEqual(d["gate_followed_by_defer_ratio"], 0.5)
         self.assertEqual((d["guard_deny"], d["guard_ask"]), (1, 1))
         self.assertEqual(d["workers"], 1)
         self.assertEqual((d["candidates_pending"], d["candidates_approved"], d["candidates_rejected"]), (1, 1, 1))
         self.assertEqual(d["stale_items"], 1)
         self.assertEqual(d["searches"], 1)
-        self.assertEqual(d["search_cited_ratio"], 0.5)
+        self.assertIsNone(d["search_cited_ratio"])
 
     def test_week_skips_unreadable_card(self):
         """One non-UTF-8 card (hand-saved as Shift-JIS) is skipped, all keys still come out (INTERFACES §8; same guard as build/search/gate)."""
@@ -642,7 +649,7 @@ class ReportTestCase(unittest.TestCase):
         d = report.audit(self.st)
         self.assertEqual(tuple(d), report.AUDIT_KEYS)
         self.assertIsInstance(d["file_count"], int)
-        self.assertEqual(d["hooks_never_fired"], ["session-start", "pre-tool", "post-tool", "stop", "session-end"])
+        self.assertEqual(d["hooks_never_fired"], ["session-start", "user-input", "pre-tool", "post-tool", "stop", "session-end"])
         self.assertIsInstance(d["event_types_without_writer"], list)
         self.assertEqual(d["profile_items_never_hit"], [])   # state.example has no items
         self.assertEqual(d["duplicate_profile_texts"], [])
@@ -676,14 +683,18 @@ class ReportTestCase(unittest.TestCase):
         st.append_event({"type": "session_end", "reason": "other", "candidates_created": 0, "ts": "garbage"})
         # 31 days old and an unreadable ts both fall outside the window (judged by ts, as in week())
         self.assertEqual(report.audit(st)["hooks_never_fired"],
-                         ["session-start", "pre-tool", "post-tool", "stop", "session-end"])
+                         ["session-start", "user-input", "pre-tool", "post-tool", "stop", "session-end"])
         st.append_event({"type": "guard", "tool": "Bash", "decision": "allow", "reason": "", "target": "ls"})
-        self.assertEqual(report.audit(st)["hooks_never_fired"], ["session-start", "post-tool", "stop", "session-end"])
+        self.assertEqual(report.audit(st)["hooks_never_fired"], ["session-start", "user-input", "post-tool", "stop", "session-end"])
         st.append_event({"type": "session_start", "env": "claude-code", "source": "startup"})
         st.append_event({"type": "tool_call", "tool": "Bash", "target": "ls", "ok": True, "out_len": 0, "out_hash": "e3b0c44298fc"})
         st.append_event({"type": "gate", "task": None, "blocked": False, "reason": ""})
-        self.assertEqual(report.audit(st)["hooks_never_fired"], ["session-end"])
+        self.assertEqual(report.audit(st)["hooks_never_fired"], ["user-input", "session-end"])
         st.append_event({"type": "session_end", "reason": "other", "candidates_created": 0})
+        before = self._home_snapshot()
+        self.assertEqual(report.audit(st)["hooks_never_fired"], ["user-input"])
+        self.assertEqual(self._home_snapshot(), before)
+        st.record_user_input("利用者の指示")
         before = self._home_snapshot()
         self.assertEqual(report.audit(st)["hooks_never_fired"], [])
         self.assertEqual(self._home_snapshot(), before)   # audit wrote no event and no file

@@ -43,7 +43,7 @@ def main() -> int:
                 "criterion")
         require(run(["task", "close", "smoke"], env).returncode == 1, "close rejects missing evidence")
         post_payload = {"session_id": "smoke", "hook_event_name": "PostToolUse", "cwd": workspace,
-                        "tool_name": "Bash", "tool_input": {"command": "pytest -q"},
+                        "tool_name": "Bash", "tool_use_id": "smoke-pytest", "tool_input": {"command": "pytest -q"},
                         "tool_response": {"stdout": "1 passed", "exit_code": 0}}
         require(run(["hook", "post-tool", "--env", "claude-code"], env, post_payload).returncode == 0,
                 "PostToolUse")

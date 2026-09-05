@@ -20,6 +20,7 @@ WEEK_KEYS = (
     "corrections", "cards_open", "cards_closed", "evidence_fill_ratio", "gate_blocks", "gate_overrides",
     "guard_deny", "guard_ask", "workers", "candidates_pending", "candidates_approved",
     "candidates_rejected", "stale_items", "searches", "search_cited_ratio",
+    "questions_followed_by_update_ratio", "gate_followed_by_defer_ratio", "evidence_reference_ratio",
 )
 
 AUDIT_DAYS = 30
@@ -29,7 +30,7 @@ AUDIT_KEYS = (
 )
 # Normalized hook → the event type it writes on every run (INTERFACES §8), in registration order.
 HOOK_EVENT_TYPES = (
-    ("session-start", "session_start"), ("pre-tool", "guard"), ("post-tool", "tool_call"),
+    ("session-start", "session_start"), ("user-input", "user_input"), ("pre-tool", "guard"), ("post-tool", "tool_call"),
     ("stop", "gate"), ("session-end", "session_end"),
 )
 POLICY_PATH = _store.REPO_ROOT / "core" / "policy" / "interaction.md"
@@ -106,6 +107,7 @@ def week(store: Store) -> dict:
 
     # evidence_fill_ratio: criteria of R>=1 cards updated within the window
     filled = 0
+    referenced = 0
     total = 0
     open_cards = 0
     for cid in store.list_tasks():
@@ -118,9 +120,12 @@ def week(store: Store) -> dict:
         ts = _store.parse_ts(card.updated)
         if card.risk == "R0" or ts is None or ts < cutoff:
             continue
+        invalid = {c.id for c, _ in taskcard.missing_evidence(store, card)}
         for c in card.criteria:
             total += 1
             if c.evidence and c.evidence != "-":
+                referenced += 1
+            if c.id not in invalid:
                 filled += 1
 
     # search_cited_ratio: ev: hits later cited by an evidence.ref of the same sid (lower bound)
@@ -138,18 +143,21 @@ def week(store: Store) -> dict:
                     hits_cited += 1
 
     profile = store.read_profile()
-    return {
+    result = {
         "sessions": count("session_start"),
         "resident_tokens_avg": round(sum(manifests) / len(manifests), 1) if manifests else 0.0,
         "questions": questions,
-        "questions_useful_ratio": _ratio(useful, questions),
+        "questions_useful_ratio": None,  # usefulness requires the user's outcome; an update is not that outcome
+        "questions_followed_by_update_ratio": _ratio(useful, questions),
         "assumptions": count("assumption"),
         "corrections": count("correction"),
         "cards_open": open_cards,
         "cards_closed": count("task_close"),
         "evidence_fill_ratio": _ratio(filled, total),
+        "evidence_reference_ratio": _ratio(referenced, total),
         "gate_blocks": blocks,
-        "gate_overrides": _ratio(overrides, blocks),
+        "gate_overrides": None,
+        "gate_followed_by_defer_ratio": _ratio(overrides, blocks),
         "guard_deny": count("guard", decision="deny"),
         "guard_ask": count("guard", decision="ask"),
         "workers": count("worker_dispatch"),
@@ -160,8 +168,9 @@ def week(store: Store) -> dict:
         "candidates_rejected": count("approval", action="reject"),
         "stale_items": _stale_count(profile, _store.today()),
         "searches": count("search"),
-        "search_cited_ratio": _ratio(hits_cited, hits_total),
+        "search_cited_ratio": None,  # evidence refs are not citations in the final answer
     }
+    return {key: result[key] for key in WEEK_KEYS}
 
 
 def _counted_files() -> list[str]:
@@ -215,6 +224,8 @@ def audit(store: Store) -> dict:
 
     hit_ids: set[str] = set()
     for ev in recent:
+        if ev.get("type") == "context_manifest":
+            hit_ids.update(pid for pid in ev.get("resident_profile_ids", []) if isinstance(pid, str))
         if ev.get("type") != "search":
             continue
         for hit in ev.get("hits") or []:

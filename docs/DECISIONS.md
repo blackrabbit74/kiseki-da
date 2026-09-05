@@ -14,3 +14,8 @@
 - 2026-09-05 決定: 2026-09-04のbackground公開方針を廃止し、`docs/background/`をbeta.1公開物から除外する — 理由: 未監査資料を公開せず、検証済みprivate backupに保持する — 廃止条件: 出典・引用・license監査と別途公開承認が完了したとき
 - 2026-09-05 決定: Codex Appのproject scopeはbeta.1では`Local`限定とし、管理Worktreeを対応対象外と明記する — 理由: 管理Worktreeは`$CODEX_HOME/worktrees`にあり、現在のcanonical path registryでは元repositoryへ対応付けられない — 廃止条件: worktree-aware scope resolverが実装・検証されたとき
 - 2026-09-05 決定: machine-readable release gateは対象commit/treeに対する最終利用者承認だけを必須にする — 理由: その他の項目は対象外化または非blocking beta観測へ移した — 廃止条件: 利用者が公開方針を変更したとき
+
+- 2026-09-05 決定: 同日のv2.4修正を公開betaへ統合。新規記憶は案件内が既定で、制約も自動で共通へ保存しない。明示的な共通化は全sectionで共通storeへ保存し、projectへ継承する — 理由: 本日のユーザー判断と一致させる — 廃止条件: 継承範囲の新しい明示判断があるとき。
+- 2026-09-05 決定: 証拠・指示の出所をevidence.pyにまとめ、12モジュールと60runtimeファイルの上限を保持する。手動adapter生成は配布せず、native pluginと固定CLI入口で同じ動作を提供する — 理由: persona/scopeと最新修正を重複なく配布する — 廃止条件: 独立したadapter対応を採択したとき。
+- 2026-09-05 決定: 任意ディレクトリにはuser scopeを案内し、限定利用にはproject scopeを案内する。shell startupは自動編集せず、導入完了時に絶対launcherとPATH設定例を表示する — 理由: 配布元への依存をなくし既存環境を保持する — 廃止条件: ユーザーが別の導入方式を指定したとき。
+- 2026-09-05 決定: Codexの文字列stdoutだけでは成功判定しない既存の厳格な規則を保持し、verify runに実行ID・案件・完全入力hashを追加する — 理由: 出力本文を終了状態と誤認しない — 廃止条件: ホストが構造化された成功状態を保証するとき。

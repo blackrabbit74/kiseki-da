@@ -9,6 +9,7 @@ import secrets
 from dataclasses import dataclass, field
 
 from core.ctx import store as _store
+from core.ctx import evidence as E
 from core.ctx.store import Store, UserError, now_iso, today
 
 RISKS = ("R0", "R1", "R2", "R3")
@@ -17,7 +18,7 @@ KINDS = ("code", "research", "decision", "ops", "writing")
 TOOL_HEADS = {"read", "grep", "glob", "webfetch", "websearch"}
 CRITERION_STATUSES = ("open", "pass", "fail", "unverified")
 DEFAULT_BUDGET = {"context_tokens": 30000, "worker_max": 0, "iterations_max": 3, "search_max": 3}
-HEADER_KEYS = ("id", "status", "risk", "kind", "created", "updated", "budget")
+HEADER_KEYS = ("id", "status", "risk", "kind", "created", "updated", "budget", "workspace", "next_action")
 SECTION_TITLES = ("Goal", "Done criteria", "Constraints / Out of scope", "Assumptions",
                   "Open questions", "Decisions", "Log")
 TABLE_HEADER = "| id | claim | check | evidence | status |"
@@ -49,6 +50,8 @@ class TaskCard:
     questions: list[str] = field(default_factory=list)
     decisions: list[str] = field(default_factory=list)
     log: list[str] = field(default_factory=list)
+    workspace: str = ""        # opened project folder; legacy cards have no inferred owner
+    next_action: str = ""
 
 
 # ---------------------------------------------------------------- parse / render
@@ -141,6 +144,8 @@ def parse(text: str) -> TaskCard:
         questions=items("Open questions"),
         decisions=items("Decisions"),
         log=items("Log"),
+        workspace=header.get("workspace", ""),
+        next_action=header.get("next_action", ""),
     )
 
 
@@ -153,6 +158,8 @@ def render(card: TaskCard) -> str:
         f"created: {card.created}",
         f"updated: {card.updated}",
         f"budget: {_render_budget(card.budget)}",
+        *([f"workspace: {card.workspace}"] if card.workspace else []),
+        *([f"next_action: {card.next_action}"] if card.next_action else []),
         "",
         "# Goal",
         card.goal.strip(),
@@ -218,9 +225,10 @@ def new_card(store: Store, goal: str, risk: str = "R1", kind: str = "code", id: 
             id = f"{base[:60]}-{n}"
     ts = now_iso()
     card = TaskCard(id=id, status="open", risk=risk, kind=kind, created=ts, updated=ts,
-                    budget=dict(DEFAULT_BUDGET), goal=goal)
+                    budget=dict(DEFAULT_BUDGET), goal=goal, workspace=store.workspace())
     store.write_text(f"tasks/{id}.md", render(card))
-    store.append_event({"type": "task_open", "task": id, "risk": risk, "kind": kind, "goal": goal})
+    store.append_event({"type": "task_open", "task": id, "risk": risk, "kind": kind, "goal": goal,
+                        "workspace": card.workspace})
     return card
 
 
@@ -240,7 +248,7 @@ def save(store: Store, card: TaskCard, changed: list[str]) -> None:
     card.updated = now_iso()
     store.write_text(f"tasks/{card.id}.md", render(card))
     store.append_event({"type": "task_update", "task": card.id, "risk": card.risk,
-                        "status": card.status, "changed": list(changed)})
+                        "status": card.status, "changed": list(changed), "workspace": card.workspace})
 
 
 def list_cards(store: Store, status: str | None = None) -> list[TaskCard]:
@@ -303,9 +311,7 @@ def _resolve_evidence_ref(store: Store, ref: str) -> dict:
 
         ev = latest(store.effective_sid())
         if ev is None:
-            ev = latest(None)
-        if ev is None:
-            raise UserError("参照できるツール証拠がありません")
+            raise UserError("このセッションに参照できるツール証拠がありません。他のセッションの結果は自動で使いません")
         return ev
     if _store.parse_event_id(ref) is None:
         raise UserError(f"証拠の参照が不正です: {ref}（{_EVIDENCE_REF_FORMAT_JA}）")
@@ -332,15 +338,19 @@ def set_evidence(store: Store, card: TaskCard, cid: str, ref: str) -> str:
     crit = _find_criterion(card, cid)
     ev = _resolve_evidence_ref(store, ref)
     resolved = f"ev:{ev.get('sid')}:{ev.get('seq')}"
-    crit.evidence = resolved  # status is left untouched; close() decides pass
+    crit.evidence = resolved
+    crit.status = "open"
     save(store, card, [f"evidence:{cid}"])
-    store.append_event({"type": "evidence", "task": card.id, "criterion": cid, "ref": resolved})
+    store.append_event({"type": "evidence", "task": card.id, "criterion": cid, "ref": resolved,
+                        "check_hash": E.expected(crit.check, card.workspace), "workspace": card.workspace})
     return resolved
 
 
 def set_status(store: Store, card: TaskCard, status: str) -> None:
     if status not in STATUSES:
         raise UserError(f"status は {'/'.join(STATUSES)} のいずれかです: {status}")
+    if status in ("done", "deferred"):
+        raise UserError("完了は task close、保留は task defer --reason で記録してください")
     card.status = status
     save(store, card, [f"status:{status}"])
 
@@ -348,8 +358,22 @@ def set_status(store: Store, card: TaskCard, status: str) -> None:
 def set_risk(store: Store, card: TaskCard, risk: str) -> None:
     if risk not in RISKS:
         raise UserError(f"risk は {'/'.join(RISKS)} のいずれかです: {risk}")
+    if RISKS.index(risk) < RISKS.index(card.risk):
+        raise UserError("リスク段階は下げられません。人の実行指示は判断の上書きとして記録し、未検証を合格にはしません")
     card.risk = risk
     save(store, card, [f"risk:{risk}"])
+
+
+def set_workspace(store: Store, card: TaskCard, workspace: str) -> None:
+    """Explicitly assign a legacy card, or move it to a known project folder."""
+    from pathlib import Path
+    if not workspace or any(ch in workspace for ch in "\r\n"):
+        raise UserError("--workspace は案件フォルダのパスで指定してください")
+    path = Path(workspace).expanduser().resolve()
+    if not path.is_dir():
+        raise UserError(f"案件フォルダがありません: {path}")
+    card.workspace = str(path)
+    save(store, card, ["workspace"])
 
 
 def add_assumption(store: Store, card: TaskCard, text: str) -> None:
@@ -378,6 +402,16 @@ def add_note(store: Store, card: TaskCard, text: str) -> None:
     save(store, card, ["note"])
 
 
+def add_constraint(store: Store, card: TaskCard, text: str) -> None:
+    card.constraints.append(_one_line_text(text, "--constraint"))
+    save(store, card, ["constraint"])
+
+
+def set_next(store: Store, card: TaskCard, text: str) -> None:
+    card.next_action = _one_line_text(text, "--next")
+    save(store, card, ["next_action"])
+
+
 def check_evidence(store: Store, criterion: Criterion) -> str | None:
     """INTERFACES §3 rules, nothing more. None = OK, else one fixed English reason (CLI maps to Japanese)."""
     ref = (criterion.evidence or "").strip()
@@ -388,23 +422,46 @@ def check_evidence(store: Store, criterion: Criterion) -> str | None:
         return "evidence not found"
     if ev.get("type") != "tool_call":
         return "not a tool call"
-    words = (criterion.check or "").split()
-    head = words[0].lower() if words else ""
-    tool = str(ev.get("tool") or "")
-    if head in TOOL_HEADS:
-        if tool.lower() != head:
-            return "tool mismatch"
-        return None if ev.get("ok") is True else "command failed"
-    target_head = (str(ev.get("target") or "").split() or [""])[0].lower()
-    if tool != "Bash" or not head or target_head != head:
-        return "command mismatch"
-    return None if ev.get("ok") is True else "command failed"
+    if ev.get("ok") is not True:
+        return "command failed" if ev.get("ok") is False else "result unknown"
+    cwd = str(ev.get("cwd") or ev.get("workspace") or "")
+    if not cwd or not ev.get("request_hash") or not ev.get("tool_use_id"):
+        return "unbound evidence"
+    if ev["request_hash"] != E.expected(criterion.check, cwd):
+        return "request mismatch"
+    if ev.get("artifact") and E.changed(ev["artifact"]):
+        return "artifact changed"
+    return None
 
 
 def missing_evidence(store: Store, card: TaskCard) -> list[tuple[Criterion, str]]:
     out: list[tuple[Criterion, str]] = []
+    events = list(store.iter_events())
+    positions = {f"ev:{ev.get('sid')}:{ev.get('seq')}": i for i, ev in enumerate(events)}
+    def invalidating(later: dict) -> bool:
+        if later.get("type") != "tool_call" or later.get("workspace") != card.workspace:
+            return False
+        if later.get("effect") == "write":
+            return True
+        if later.get("effect") != "unknown":
+            return False
+        # A registered verification command (e.g. a project-specific Python checker) is not
+        # itself an inferred edit. Unregistered unknown operations require re-verification.
+        cwd = str(later.get("cwd") or card.workspace)
+        checks = {E.expected(c.check, cwd) for c in card.criteria}
+        return later.get("request_hash") not in (checks - {None})
     for c in card.criteria:
         reason = check_evidence(store, c)
+        if reason is None:
+            pos = positions.get(c.evidence, -1)
+            ev = events[pos]
+            if not card.workspace or ev.get("workspace") != card.workspace:
+                reason = "workspace mismatch"
+            elif any(invalidating(later) for later in events[pos + 1:]):
+                reason = "evidence stale"
+            elif not any(earlier.get("type") in ("task_open", "task_update")
+                         and earlier.get("task") == card.id for earlier in events[:pos]):
+                reason = "evidence predates task"
         if reason is not None:
             out.append((c, reason))
     return out
@@ -446,6 +503,8 @@ def brief(store: Store, card: TaskCard, role: str, scope: str | None) -> str:
     else:
         role_line = "役割: レビュー。上の目標に対する変更を読取専用で検証し、欠陥を報告する。"
     lines = ["# 目標", goal, role_line, "", "# 対象範囲", scope_text]
+    if card.constraints:
+        lines += ["", "守る制約・対象外:"] + [f"- {c}" for c in card.constraints]
     if role == "review":
         lines += ["", "検証する完了条件:"]
         if card.criteria:

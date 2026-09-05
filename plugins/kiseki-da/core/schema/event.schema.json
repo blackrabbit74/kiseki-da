@@ -1,39 +1,105 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:kiseki-da:schema:event",
-  "title": "Kiseki DA event",
-  "description": "KISEKI_DA_HOME/events.jsonl の1行。共通4キーは必須、残りはtypeごとの追加フィールド。イベントidはev:<sid>:<seq>（保存しない）。",
+  "$id": "urn:pa-harness:schema:event",
+  "title": "pa-harness event",
+  "description": "$PA_HOME/events.jsonl の 1 行（INTERFACES.md §4）。共通 4 キーは必須、残りは type ごとの追加フィールド: session_start{env,source} session_end{reason,candidates_created} context_manifest{budget,used,parts,conflicts,chars} task_open{task,risk,kind,goal} task_update{task,risk,status,changed} task_close{task,risk,status} question/assumption{task,text} tool_call{tool,target,ok,out_len,out_hash} evidence{task,criterion,ref} gate{task,blocked,reason} guard{tool,decision,reason,target} correction{before,after,quote} capture{text,source,url} candidate{cid,kind,source} approval{cid,pid,action} worker_dispatch{task,role,tokens_est} worker_return{task,role,tokens_est,text} search{query,k,hits} proposal{text,evidence_counts,kill_condition} error{where,message}。イベント id は ev:<sid>:<seq>（保存しない）。",
   "type": "object",
-  "required": ["ts", "sid", "seq", "type"],
+  "required": [
+    "ts",
+    "sid",
+    "seq",
+    "type"
+  ],
   "properties": {
-    "ts": {"type": "string", "format": "date-time", "description": "now_iso()"},
-    "sid": {"type": "string", "description": "セッション id（hook は環境の session_id、CLI は --sid → session/current → nosession）"},
-    "seq": {"type": "integer", "description": "sid ごとの単調増加カウンタ"},
+    "ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "now_iso()"
+    },
+    "sid": {
+      "type": "string",
+      "description": "セッション id（hook は環境の session_id、CLI は --sid → session/current → nosession）"
+    },
+    "seq": {
+      "type": "integer",
+      "description": "sid ごとの単調増加カウンタ"
+    },
     "type": {
       "type": "string",
       "enum": [
-        "session_start", "session_end", "context_manifest",
-        "task_open", "task_update", "task_close",
-        "question", "assumption", "tool_call", "evidence",
-        "gate", "guard", "correction", "capture", "candidate", "approval",
-        "worker_dispatch", "worker_return", "search", "proposal", "error"
+        "session_start",
+        "session_end",
+        "context_manifest",
+        "task_open",
+        "task_update",
+        "task_close",
+        "question",
+        "assumption",
+        "tool_call",
+        "evidence",
+        "gate",
+        "guard",
+        "correction",
+        "capture",
+        "candidate",
+        "approval",
+        "worker_dispatch",
+        "worker_return",
+        "search",
+        "proposal",
+        "error",
+        "user_input",
+        "human_override",
+        "authority_used",
+        "context_read"
       ]
     },
-    "env": {"type": "string", "description": "session_start: claude-code | codex"},
-    "source": {"type": "string", "description": "session_start: startup / resume / clear / compact / fork（未知の値も通す）。capture: document:<ref> など。candidate: user-stated | inference | document:<ref>"},
-    "reason": {"type": "string", "description": "session_end: 環境の reason をそのまま。gate / guard: 判定理由"},
-    "candidates_created": {"type": "integer", "description": "session_end"},
-    "budget": {"type": "integer", "description": "context_manifest"},
-    "used": {"type": "integer", "description": "context_manifest"},
+    "env": {
+      "type": "string",
+      "description": "session_start: claude-code | codex"
+    },
+    "source": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "session_start: startup / resume / clear / compact / fork（未知の値も通す）。capture: document:<ref> など。candidate: user-stated | inference | document:<ref>"
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "session_end: 環境の reason をそのまま。gate / guard: 判定理由"
+    },
+    "candidates_created": {
+      "type": "integer",
+      "description": "session_end"
+    },
+    "budget": {
+      "type": "integer",
+      "description": "context_manifest"
+    },
+    "used": {
+      "type": "integer",
+      "description": "context_manifest"
+    },
     "parts": {
       "type": "array",
       "description": "context_manifest",
       "items": {
         "type": "object",
         "properties": {
-          "name": {"type": "string", "description": "policy | constraints | cards | preferences | goals | env | pending"},
-          "tokens": {"type": "integer"},
-          "truncated": {"type": "boolean"}
+          "name": {
+            "type": "string",
+            "description": "policy | constraints | cards | preferences | goals | env | pending"
+          },
+          "tokens": {
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
         }
       }
     },
@@ -43,43 +109,248 @@
       "items": {
         "type": "object",
         "properties": {
-          "key": {"type": "string"},
-          "ids": {"type": "array", "items": {"type": "string"}}
+          "key": {
+            "type": "string"
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       }
     },
-    "chars": {"type": "integer", "description": "context_manifest: 本文の文字数（≤9,000）"},
-    "task": {"type": ["string", "null"], "description": "カード id。gate では null 可"},
-    "risk": {"type": "string", "description": "R0 | R1 | R2 | R3"},
-    "kind": {"type": "string", "description": "task_open: code | research | decision | ops | writing。candidate: constraint | preference | goal | fact"},
-    "goal": {"type": "string", "description": "task_open"},
-    "status": {"type": "string", "description": "task_update / task_close: open | done | deferred | abandoned"},
-    "changed": {"type": "array", "items": {"type": "string"}, "description": "task_update: criterion:C2, evidence:C1, status:done, risk:R2, assumption, question, decision, note, defer"},
-    "text": {"type": "string", "description": "question / assumption / capture / worker_return / proposal（redact 済み）"},
-    "tool": {"type": "string", "description": "tool_call / guard: 環境のツール名（Bash, Read, Edit …）"},
-    "target": {"type": "string", "maxLength": 200, "description": "tool_call / guard: command → file_path → dumps(tool_input) の先頭 200 字（redact 済み）"},
-    "ok": {"type": ["boolean", "null"], "description": "tool_call: 失敗イベントなら false、応答が無ければ null"},
-    "out_len": {"type": "integer", "description": "tool_call"},
-    "out_hash": {"type": "string", "description": "tool_call: sha256 の先頭 12 文字"},
-    "criterion": {"type": "string", "description": "evidence: C1..Cn"},
-    "ref": {"type": "string", "description": "evidence: ev:<sid>:<seq>"},
-    "blocked": {"type": "boolean", "description": "gate"},
-    "decision": {"type": "string", "enum": ["allow", "ask", "deny"], "description": "guard"},
-    "before": {"type": "string", "description": "correction（redact 済み）"},
-    "after": {"type": "string", "description": "correction（redact 済み）"},
-    "quote": {"type": ["string", "null"], "description": "correction: 利用者の言葉"},
-    "url": {"type": ["string", "null"], "description": "capture"},
-    "cid": {"type": ["string", "null"], "description": "candidate / approval: cand-<N>"},
-    "pid": {"type": ["string", "null"], "description": "approval: 追加した profile id（reject では null）"},
-    "action": {"type": "string", "enum": ["approve", "reject"], "description": "approval"},
-    "role": {"type": "string", "enum": ["research", "review"], "description": "worker_dispatch / worker_return"},
-    "tokens_est": {"type": "integer", "description": "worker_dispatch / worker_return"},
-    "query": {"type": "string", "description": "search"},
-    "k": {"type": "integer", "description": "search"},
-    "hits": {"type": "array", "items": {"type": "string"}, "description": "search: ヒットの id（ev:… / task:… / profile:…）"},
-    "evidence_counts": {"type": "object", "description": "proposal"},
-    "kill_condition": {"type": "string", "description": "proposal: 廃止条件"},
-    "where": {"type": "string", "description": "error: 発生箇所（例: hook:pre-tool）"},
-    "message": {"type": "string", "description": "error"}
+    "chars": {
+      "type": "integer",
+      "description": "context_manifest: 本文の文字数（≤9,000）"
+    },
+    "task": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "カード id。gate では null 可"
+    },
+    "workspace": {
+      "type": "string",
+      "description": "task_open / task_update の所属案件フォルダ。旧カードでは空。"
+    },
+    "risk": {
+      "type": "string",
+      "description": "R0 | R1 | R2 | R3"
+    },
+    "kind": {
+      "type": "string",
+      "description": "task_open: code | research | decision | ops | writing。candidate: constraint | preference | goal | fact"
+    },
+    "goal": {
+      "type": "string",
+      "description": "task_open"
+    },
+    "status": {
+      "type": "string",
+      "description": "task_update / task_close: open | done | deferred | abandoned"
+    },
+    "changed": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "task_update: criterion:C2, evidence:C1, status:done, risk:R2, assumption, question, decision, note, defer"
+    },
+    "text": {
+      "type": "string",
+      "description": "question / assumption / capture / worker_return / proposal（redact 済み）"
+    },
+    "tool": {
+      "type": "string",
+      "description": "tool_call / guard: 環境のツール名（Bash, Read, Edit …）"
+    },
+    "target": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "tool_call / guard: command → file_path → dumps(tool_input) の先頭 200 字（redact 済み）"
+    },
+    "ok": {
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "description": "tool_call: 失敗イベントなら false、応答が無ければ null"
+    },
+    "out_len": {
+      "type": "integer",
+      "description": "tool_call"
+    },
+    "out_hash": {
+      "type": "string",
+      "description": "tool_call: sha256 の先頭 12 文字"
+    },
+    "criterion": {
+      "type": "string",
+      "description": "evidence: C1..Cn"
+    },
+    "ref": {
+      "type": "string",
+      "description": "evidence: ev:<sid>:<seq>"
+    },
+    "blocked": {
+      "type": "boolean",
+      "description": "gate"
+    },
+    "decision": {
+      "type": "string",
+      "enum": [
+        "allow",
+        "ask",
+        "deny"
+      ],
+      "description": "guard"
+    },
+    "before": {
+      "type": "string",
+      "description": "correction（redact 済み）"
+    },
+    "after": {
+      "type": "string",
+      "description": "correction（redact 済み）"
+    },
+    "quote": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "correction: 利用者の言葉"
+    },
+    "url": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "capture"
+    },
+    "cid": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "candidate / approval: cand-<N>"
+    },
+    "pid": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "approval: 追加した profile id（reject では null）"
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "approve",
+        "reject"
+      ],
+      "description": "approval"
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "research",
+        "review"
+      ],
+      "description": "worker_dispatch / worker_return"
+    },
+    "tokens_est": {
+      "type": "integer",
+      "description": "worker_dispatch / worker_return"
+    },
+    "query": {
+      "type": "string",
+      "description": "search"
+    },
+    "k": {
+      "type": "integer",
+      "description": "search"
+    },
+    "hits": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "search: ヒットの id（ev:… / task:… / profile:…）"
+    },
+    "evidence_counts": {
+      "type": "object",
+      "description": "proposal"
+    },
+    "kill_condition": {
+      "type": "string",
+      "description": "proposal: 廃止条件"
+    },
+    "where": {
+      "type": "string",
+      "description": "error: 発生箇所（例: hook:pre-tool）"
+    },
+    "message": {
+      "type": "string",
+      "description": "error"
+    },
+    "cwd": {
+      "type": "string"
+    },
+    "request_hash": {
+      "type": "string"
+    },
+    "check_hash": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "tool_use_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "effect": {
+      "type": "string"
+    },
+    "artifact": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "required_context": {
+      "type": "object"
+    },
+    "resident_profile_ids": {
+      "type": "array"
+    },
+    "user_input_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "authority_ref": {
+      "type": "string"
+    },
+    "content_hash": {
+      "type": "string"
+    },
+    "page": {
+      "type": "integer"
+    },
+    "pages": {
+      "type": "integer"
+    },
+    "transaction_id": {
+      "type": "string"
+    },
+    "instruction_changed": {
+      "type": "boolean"
+    }
   }
 }

@@ -109,12 +109,38 @@ class ScopeTestCase(unittest.TestCase):
         self.assertEqual(persona.get_persona(b.read_effective_profile())["name"], "B")
         self.assertEqual(a.project_id, row1["id"])
 
-    def test_project_constraint_is_written_to_common_profile(self):
+    def test_project_constraint_stays_local_unless_user_explicitly_promotes(self):
         scope.add_project(self.home, self.p1)
+        scope.add_project(self.home, self.p2)
         project = scope.scoped_store(self.home, self.p1, sid="p")
-        pid = project.remember("全案件で守る", kind="constraint")
-        self.assertIn(pid, [x["id"] for x in self.common.read_profile()["constraints"]])
-        self.assertEqual(project.read_profile()["constraints"], [])
+        other = scope.scoped_store(self.home, self.p2, sid="b")
+        project.set_workspace(str(self.p1))
+        pid = project.remember("この案件で守る", kind="constraint")
+        self.assertIn(pid, [x["id"] for x in project.read_profile()["constraints"]])
+        self.assertEqual(self.common.read_profile()["constraints"], [])
+        self.assertEqual(other.read_effective_profile()["constraints"], [])
+        quote = "全案件で『共通の制約』を覚えて"
+        project.record_user_input(quote)
+        project.remember("共通の制約", kind="constraint", global_scope=True, quote=quote)
+        self.assertEqual([x["text"] for x in other.read_effective_profile()["constraints"]], ["共通の制約"])
+
+    def test_explicit_global_candidate_approval_is_shared_and_recovers_once(self):
+        from unittest import mock
+        scope.add_project(self.home, self.p1)
+        scope.add_project(self.home, self.p2)
+        project = scope.scoped_store(self.home, self.p1, sid="p")
+        other = scope.scoped_store(self.home, self.p2, sid="b")
+        project.set_workspace(str(self.p1))
+        quote = "全案件で『根拠を明記』を覚えて"
+        project.record_user_input(quote)
+        cid = project.append_candidate({"text": "根拠を明記", "source": "user-stated"})
+        with mock.patch.object(project, "set_candidate_status", side_effect=OSError("interrupted")):
+            with self.assertRaises(OSError):
+                project.approve(cid, global_scope=True, quote=quote)
+        project.approve(cid, global_scope=True, quote=quote)
+        self.assertEqual([x["text"] for x in other.read_effective_profile()["preferences"]], ["根拠を明記"])
+        self.assertEqual(project.read_profile()["preferences"], [])
+        self.assertEqual(len(list(project.iter_events(types={"approval"}))), 1)
 
     def test_inactive_hook_is_noop_before_any_write(self):
         scope.add_project(self.home, self.p1)

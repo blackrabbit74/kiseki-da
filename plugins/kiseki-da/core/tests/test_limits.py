@@ -19,8 +19,9 @@ MAX_FILES = 60
 MAX_CTX_MODULES = 12
 MAX_POLICY_LINES = 60
 MAX_POLICY_TOKENS = 800
-NORMALIZED = {"session-start", "pre-tool", "post-tool", "stop", "session-end"}
+NORMALIZED = {"user-input", "session-start", "pre-tool", "post-tool", "stop", "session-end"}
 HOOK_MAP = {
+    "UserPromptSubmit": "user-input",
     "SessionStart": "session-start",
     "PreToolUse": "pre-tool",
     "PostToolUse": "post-tool",

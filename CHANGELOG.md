@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0-beta.1 - Unreleased
+## 0.1.0-beta.1 - 2026-09-05
 
 - pa-harnessをKiseki DA（Digital Assistant）として再構成。
 - Claude Code / Codexのdual-manifest plugin packagingを追加。
@@ -8,6 +8,11 @@
 - schema 2の小さなキャラクター設定とproject scopeを追加。
 - `KISEKI_DA_HOME`と明示的な旧`PA_HOME`移行を追加。
 - macOS localをbeta.1対応対象とし、Linuxはbeta観測、Windows 11 / WSL2は検証待ちの対象外として整理。
-- 複数host sessionのSID混線防止、実plugin cacheの5 hook smoke、設定変更transactionを追加。
+- 複数host sessionのSID混線防止、実plugin cacheの6 hook smoke、設定変更transactionを追加。
 - release gateをversion・commit・tree・最終利用者承認へ結合し、validator・CI・persona品質はbeta観測へ移行。
 - 未監査のbackground資料を公開treeから除外し、Codex AppはLocal限定と明記。
+
+- 2026-09-05の最新版を統合: 案件ごとのカード・記憶分離、現在のユーザー指示の優先、制約のページ取得、完全入力hashによる証拠照合、承認処理の再試行。
+- UserPromptSubmitの記録hookを両ホストへ追加。記憶の共通化は明示指示がある場合だけ行う。
+- 任意のフォルダで利用するuser scopeと、指定フォルダ限定のproject scopeの導入手順を追加。
+- 配布元・状態領域の日本語／空白パス、固定CLI入口、複数runtimeを同一プロセスで扱う場合のimport先を修正。

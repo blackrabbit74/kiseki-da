@@ -221,6 +221,38 @@ class InstallerTests(unittest.TestCase):
     def mutation_log(self) -> list[str]:
         return self.log.read_text(encoding="utf-8").splitlines() if self.log.exists() else []
 
+    def test_installed_launcher_works_from_arbitrary_folders_without_source(self):
+        renamed = self.base / "配布元 space"
+        self.source.rename(renamed)
+        self.source = renamed
+        self.env["FAKE_PLUGIN_PATH"] = str(renamed / "plugins" / "kiseki-da")
+        result = self.install("codex")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(str(self.home / "bin"), result.stdout)
+        # The installed runtime must be sufficient after the downloaded source is removed.
+        shutil.rmtree(renamed)
+        launcher = self.home / "bin" / "kiseki-da.py"
+        a = self.base / "案件 A 日本語"
+        b = self.base / "案件 B space"
+        a.mkdir(); b.mkdir()
+        def run(cwd, *args):
+            return subprocess.run([sys.executable, str(launcher), *args], cwd=cwd,
+                                  env=self.env, text=True, capture_output=True)
+        for cwd in (a, b):
+            self.assertEqual(run(cwd, "version").stdout.strip(), "0.1.0-beta.1")
+            policy = run(cwd, "policy", "show", "verification")
+            self.assertEqual(policy.returncode, 0, policy.stderr)
+            self.assertIn("証拠", policy.stdout)
+        made = run(a, "task", "new", "--goal", "A_ONLY_WORK", "--id", "a-only")
+        self.assertEqual(made.returncode, 0, made.stderr)
+        self.assertIn("A_ONLY_WORK", run(a, "build").stdout)
+        self.assertNotIn("A_ONLY_WORK", run(b, "build").stdout)
+        if os.name != "nt":
+            direct = subprocess.run([str(self.home / "bin" / "kiseki-da"), "version"],
+                                    cwd=b, env=self.env, text=True, capture_output=True)
+            self.assertEqual(direct.returncode, 0, direct.stderr)
+            self.assertEqual(direct.stdout.strip(), "0.1.0-beta.1")
+
     def test_new_install_both_hosts_and_launcher_dispatch(self) -> None:
         result = self.install()
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)

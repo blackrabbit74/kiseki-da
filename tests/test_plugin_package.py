@@ -45,8 +45,8 @@ class PluginPackageTest(unittest.TestCase):
     def test_host_specific_hook_command_contracts(self):
         claude = json.loads((PLUGIN / "hooks" / "claude-code.json").read_text(encoding="utf-8"))["hooks"]
         codex = json.loads((PLUGIN / "hooks" / "hooks.json").read_text(encoding="utf-8"))["hooks"]
-        self.assertEqual(set(claude), {"SessionStart", "PreToolUse", "PostToolUse", "PostToolUseFailure", "Stop", "SessionEnd"})
-        self.assertEqual(set(codex), {"SessionStart", "PreToolUse", "PostToolUse", "Stop", "SessionEnd"})
+        self.assertEqual(set(claude), {"UserPromptSubmit", "SessionStart", "PreToolUse", "PostToolUse", "PostToolUseFailure", "Stop", "SessionEnd"})
+        self.assertEqual(set(codex), {"UserPromptSubmit", "SessionStart", "PreToolUse", "PostToolUse", "Stop", "SessionEnd"})
         for groups in claude.values():
             for group in groups:
                 for hook in group["hooks"]:
@@ -62,7 +62,7 @@ class PluginPackageTest(unittest.TestCase):
                     self.assertIn("${PLUGIN_ROOT}/scripts/hook_entry.py", hook["commandWindows"])
 
     def test_exact_normalized_hook_set(self):
-        expected = {"session-start", "pre-tool", "post-tool", "stop", "session-end"}
+        expected = {"user-input", "session-start", "pre-tool", "post-tool", "stop", "session-end"}
         for filename in ("hooks.json", "claude-code.json"):
             text = (PLUGIN / "hooks" / filename).read_text(encoding="utf-8")
             self.assertEqual({event for event in expected if event in text}, expected)

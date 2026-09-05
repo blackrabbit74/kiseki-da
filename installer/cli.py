@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import shutil
+import shlex
 import sys
 from pathlib import Path
 from typing import Any
@@ -27,7 +28,7 @@ RUNTIME_COMMANDS = {
     "setup", "persona", "project", "task", "search", "candidate", "approve", "reject",
     "remember", "report", "capture", "log", "build", "hook", "evals",
     "verify",
-    "session",
+    "session", "context", "policy",
 }
 
 
@@ -98,6 +99,15 @@ def _emit(value: dict[str, Any], *, json_output: bool = False, show_plan: bool =
         print(f"transaction: {value['transaction']}")
     if value.get("status"):
         print(f"status: {value['status']}")
+    if value.get("status") in {"installed", "updated"} and value.get("home"):
+        home = Path(value["home"])
+        name = "kiseki-da.cmd" if os.name == "nt" else "kiseki-da"
+        print(f"CLI: {home / 'bin' / name}")
+        if os.name != "nt":
+            print('このターミナルのPATH設定: export PATH=' + shlex.quote(str(home / "bin")) + ':"$PATH"')
+        print("次の確認: kiseki-da doctor")
+        if "codex" in value.get("hosts", []):
+            print("Codexを再起動し /hooks で確認・trust後、kiseki-da doctor --confirm-codex-trust を実行してください。")
     if value.get("error"):
         print(f"error: {value['error']}", file=sys.stderr)
     rollback_errors = value.get("rollback_errors") or value.get("errors")

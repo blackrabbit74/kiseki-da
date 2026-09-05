@@ -5,7 +5,7 @@ Kiseki DA は外部telemetryを送信しません。対応対象のmacOS/Linux�
 ## ローカルに保存するもの
 
 - ユーザーが確定した基本設定とキャラクター設定
-- 承認済みの制約・選好・目標・事実
+- 承認済みの制約・選好・目標・事実（新規は案件内、明示的に共通化したものだけ全案件で継承）
 - タスクカード、証拠参照、候補、hookイベント
 - installer transaction、バックアップ、導入版とscope
 
@@ -24,3 +24,5 @@ SessionStartで、有効な基本方針、キャラクター設定、共通制�
 ## 削除
 
 通常の`kiseki-da uninstall`はprofile、events、tasks、project state、transaction backupを残します。残存する`KISEKI_DA_HOME`を表示するので、完全削除は内容を確認して利用者自身が別操作で行います。v0.1には状態を自動全削除する機能を含めません。
+
+UserPromptSubmit hookは現在の利用者発言と案件・セッションの識別情報をprivate stateへ記録します。指示の出所の照合に使い、hookからネットワークへ送信しません。任意のシェル権限を持つプロセスとのOSレベルの隔離は提供しません。

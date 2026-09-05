@@ -6,7 +6,11 @@
           {
             "type": "command",
             "command": "${user_config.python_executable}",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hook_entry.py", "session-start", "claude-code"]
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/hook_entry.py",
+              "session-start",
+              "claude-code"
+            ]
           }
         ]
       }
@@ -18,7 +22,11 @@
           {
             "type": "command",
             "command": "${user_config.python_executable}",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hook_entry.py", "pre-tool", "claude-code"]
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/hook_entry.py",
+              "pre-tool",
+              "claude-code"
+            ]
           }
         ]
       }
@@ -30,7 +38,11 @@
           {
             "type": "command",
             "command": "${user_config.python_executable}",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hook_entry.py", "post-tool", "claude-code"],
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/hook_entry.py",
+              "post-tool",
+              "claude-code"
+            ],
             "timeout": 5
           }
         ]
@@ -43,7 +55,11 @@
           {
             "type": "command",
             "command": "${user_config.python_executable}",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hook_entry.py", "post-tool", "claude-code"],
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/hook_entry.py",
+              "post-tool",
+              "claude-code"
+            ],
             "timeout": 5
           }
         ]
@@ -55,7 +71,11 @@
           {
             "type": "command",
             "command": "${user_config.python_executable}",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hook_entry.py", "stop", "claude-code"]
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/hook_entry.py",
+              "stop",
+              "claude-code"
+            ]
           }
         ]
       }
@@ -66,8 +86,27 @@
           {
             "type": "command",
             "command": "${user_config.python_executable}",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hook_entry.py", "session-end", "claude-code"],
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/hook_entry.py",
+              "session-end",
+              "claude-code"
+            ],
             "timeout": 3
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${user_config.python_executable}",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/hook_entry.py",
+              "user-input",
+              "claude-code"
+            ]
           }
         ]
       }

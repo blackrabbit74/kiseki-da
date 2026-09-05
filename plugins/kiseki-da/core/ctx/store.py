@@ -8,10 +8,12 @@ from __future__ import annotations
 import contextlib
 import datetime as _dt
 import hashlib
+import functools
 import json
 import os
 import re
 import shutil
+import secrets
 import tomllib
 from pathlib import Path
 from typing import Iterator, Literal
@@ -33,6 +35,7 @@ EVENT_TYPES: frozenset[str] = frozenset({
     "question", "assumption", "tool_call", "evidence",
     "gate", "guard", "correction", "capture", "candidate", "approval",
     "worker_dispatch", "worker_return", "search", "proposal", "error",
+    "user_input", "human_override", "authority_used", "context_read",
 })
 LOG_TYPES = ("correction", "worker_return", "proposal", "error")
 CANDIDATE_KINDS = ("constraint", "preference", "goal", "fact")
@@ -337,53 +340,39 @@ def emit_toml(data: dict) -> str:
 
 
 # ---------------------------------------------------------------- validation table
-# Mirrors core/schema/*.json (required keys and property types). Files are never read at runtime.
+# Compile required keys and types from core/schema/*.json; one cached load per process.
 
-_DATE = (_dt.date, str)
-_NUM = (int, float)
-# Item keys: INTERFACES §1 marks only id / text as 必須; the writers (approve / remember) always fill
-# source / recorded_at / confidence / review_by, and a hand-edited item is type-checked when they exist.
-_ITEM_SCHEMA = {
-    "required": {"id": str, "text": str},
-    "optional": {"source": str, "recorded_at": _DATE, "confidence": _NUM, "review_by": _DATE,
-                 "key": str, "corrected_from": str, "status": str},
-}
-_CRITERION_SCHEMA = {
-    "required": {"id": str, "claim": str, "check": str, "evidence": str, "status": str},
-    "optional": {},
-}
-_SCHEMAS: dict[str, dict] = {
-    "profile": {
-        "required": {"schema": int, "identity": dict, "da": dict},
-        "optional": {"persona": dict, "constraints": list, "preferences": list, "goals": list, "facts": list},
-    },
-    "event": {
-        "required": {"ts": str, "sid": str, "seq": int, "type": str},
-        "optional": {
-            "env": str, "source": str, "reason": str, "candidates_created": int,
-            "budget": int, "used": int, "parts": list, "conflicts": list, "chars": int,
-            "task": (str, type(None)), "risk": str, "kind": str, "goal": str, "status": str, "changed": list,
-            "text": str, "tool": str, "target": str, "ok": (bool, type(None)), "out_len": int, "out_hash": str,
-            "criterion": str, "ref": str, "blocked": bool, "decision": str,
-            "before": str, "after": str, "quote": (str, type(None)), "url": (str, type(None)),
-            "cid": (str, type(None)), "pid": (str, type(None)), "action": str,
-            "role": str, "tokens_est": int, "query": str, "k": int, "hits": list,
-            "evidence_counts": dict, "kill_condition": str, "where": str, "message": str,
-        },
-    },
-    "candidate": {
-        "required": {"id": str, "kind": str, "text": str, "source": str, "status": str, "created": str},
-        "optional": {"quote": str, "key": (str, type(None)), "reason": str, "updated": str, "sid": str},
-    },
-    "task": {
-        "required": {
-            "id": str, "status": str, "risk": str, "kind": str, "created": str, "updated": str,
-            "budget": dict, "goal": str, "criteria": list, "constraints": list, "assumptions": list,
-            "questions": list, "decisions": list, "log": list,
-        },
-        "optional": {},
-    },
-}
+_SCHEMA_FILES = {"profile": "profile", "event": "event", "candidate": "candidate", "task": "task-card"}
+
+
+def _schema_type(spec: dict):
+    types = {"string": str, "integer": int, "number": (int, float), "boolean": bool,
+             "object": dict, "array": list, "null": type(None)}
+    names = spec.get("type", [])
+    names = [names] if isinstance(names, str) else names
+    out = []
+    for name in names:
+        typ = types[name]
+        out.extend(typ if isinstance(typ, tuple) else (typ,))
+    if spec.get("format") in ("date", "date-time") and str in out:
+        out.append(_dt.date)
+    return out[0] if len(out) == 1 else tuple(out)
+
+
+def _schema_table(spec: dict) -> dict:
+    required = set(spec.get("required", []))
+    return {kind: {key: _schema_type(value) for key, value in spec.get("properties", {}).items()
+                   if "type" in value and (key in required) == (kind == "required")}
+            for kind in ("required", "optional")}
+
+
+@functools.lru_cache(maxsize=16)
+def _schema_tables(kind: str, root: str) -> tuple[dict, dict]:
+    # JSON files own required keys and types. Compile once per process, keeping hook I/O bounded.
+    path = Path(root) / "core/schema" / (_SCHEMA_FILES[kind] + ".schema.json")
+    schema = json.loads(path.read_text(encoding="utf-8"))
+    item = schema.get("$defs", {}).get("item" if kind == "profile" else "criterion", {})
+    return _schema_table(schema), _schema_table(item)
 
 
 def _check_obj(schema: dict, obj: dict, prefix: str, errors: list[str]) -> None:
@@ -451,7 +440,7 @@ class Store:
 
     # ------------------------------------------------------------ init / profile
     def _ensure_home(self) -> None:
-        """Create the home as a private area (mode 700) when a write happens before `ctx init`.
+        """Create the home as a private area (mode 700) when a write happens before `kiseki-da init`.
 
         An existing directory is left as it is; `init` is the place that fixes modes up.
         """
@@ -514,10 +503,10 @@ class Store:
         effective["identity"] = dict(common.get("identity") or {})
         effective["da"] = dict(local.get("da") or {})
         effective["persona"] = dict(local.get("persona") or {})
-        effective["constraints"] = list(common.get("constraints") or [])
+        effective["constraints"] = [*(common.get("constraints") or []), *(local.get("constraints") or [])]
         effective["preferences"] = [*(common.get("preferences") or []), *(local.get("preferences") or [])]
-        effective["goals"] = list(local.get("goals") or [])
-        effective["facts"] = list(local.get("facts") or [])
+        effective["goals"] = [*(common.get("goals") or []), *(local.get("goals") or [])]
+        effective["facts"] = [*(common.get("facts") or []), *(local.get("facts") or [])]
         return effective
 
     def write_profile(self, data: dict) -> None:
@@ -531,7 +520,7 @@ class Store:
 
     def snapshot(self) -> Path:
         if not self.profile_path.exists():
-            raise UserError("profile.toml がありません（先に ctx init を実行してください）")
+            raise UserError("profile.toml がありません（先に kiseki-da init を実行してください）")
         d = self.home / "snapshots"
         d.mkdir(parents=True, exist_ok=True)
         stamp = _dt.datetime.now().strftime("%Y%m%dT%H%M%S%f")
@@ -633,6 +622,47 @@ class Store:
             raise UserError("複数sessionが有効です。混線を防ぐため--sid <session>を指定してください")
         return (active[0] if active else self.current_sid()) or "nosession"
 
+    def workspace(self) -> str:
+        """The session's opened folder, independent of an individual tool's working directory."""
+        path = f"session/{_safe_name(self.effective_sid())}.workspace"
+        value = self.read_text(path)
+        if value is not None:
+            return value.strip()  # an unknown hook cwd is explicitly empty; do not guess
+        return str(Path.cwd().resolve())  # standalone CLI before a session-start hook
+
+    def set_workspace(self, cwd: str) -> None:
+        """Record only an absolute host-provided project folder; missing cwd stays unknown."""
+        path = Path(cwd) if cwd and not any(ch in cwd for ch in "\r\n") else None
+        value = str(path.resolve()) if path is not None and path.is_absolute() else ""
+        self.write_text(f"session/{_safe_name(self.effective_sid())}.workspace", value + "\n")
+
+    def set_environment(self, env: str) -> None:
+        self.write_text(f"session/{_safe_name(self.effective_sid())}.env", env)
+
+    def environment(self) -> str | None:
+        return self.read_text(f"session/{_safe_name(self.effective_sid())}.env")
+
+    def record_user_input(self, prompt: str) -> None:
+        from core.ctx import evidence as authority
+        previous = self.user_input()
+        short = prompt.strip().rstrip("。！!？? ")
+        status_only = bool(re.fullmatch(r"がんば(?:れ|って)?|頑張(?:れ|って)|ありがとう(?:ございます)?|いける|進捗(?:は)?|どうなった", short))
+        continuation = short in ("再開", "続けて") and previous and not authority.cancels(previous.get("prompt", ""))
+        if previous and previous.get("workspace") == self.workspace() and (status_only or continuation):
+            rec = {**previous, "latest_prompt": prompt}
+        else:
+            rec = {"id": secrets.token_hex(12), "prompt": prompt, "latest_prompt": prompt, "workspace": self.workspace()}
+        self.write_text(f"session/{_safe_name(self.effective_sid())}.user.json", dumps(rec))
+        self.append_event({"type": "user_input", "user_input_id": rec["id"], "chars": len(prompt),
+                           "instruction_changed": not previous or rec["id"] != previous.get("id")})
+
+    def user_input(self) -> dict | None:
+        raw = self.read_text(f"session/{_safe_name(self.effective_sid())}.user.json")
+        try:
+            return json.loads(raw) if raw else None
+        except ValueError:
+            return None
+
     # ------------------------------------------------------------ events
     def _next_seq(self, sid: str) -> int:
         p = self.home / "session" / f"{_safe_name(sid)}.seq"
@@ -721,8 +751,10 @@ class Store:
         if not (source in ("user-stated", "inference") or source.startswith("document:")):
             raise UserError(f"候補の source は user-stated / inference / document:<ref> のいずれかです: {source}")
         existing = self._read_candidates()
+        workspace = self.workspace()
         for rec in existing.values():
-            if rec.get("status") == "pending" and rec.get("text") == text:
+            if (rec.get("status") == "pending" and rec.get("text") == text
+                    and rec.get("workspace") == workspace and rec.get("kind") == kind):
                 return rec["id"]
         n = max([_num_suffix(cid) for cid in existing] + [0]) + 1
         rec = {
@@ -734,6 +766,8 @@ class Store:
             "status": "pending",
             "created": now_iso(),
             "sid": self.effective_sid(),
+            "scope": "workspace",
+            "workspace": workspace,
         }
         if cand.get("key"):
             rec["key"] = str(cand["key"])
@@ -765,7 +799,25 @@ class Store:
         return cand
 
     def approve(self, cid: str, confidence: float | None = None, review_by: str | None = None,
-                supersedes: str | None = None) -> str:
+                supersedes: str | None = None, *, global_scope: bool = False, quote: str | None = None) -> str:
+        cand = self._read_candidates().get(cid)
+        if not cand or cand.get("status") == "rejected":
+            self._pending_candidate(cid)
+        if global_scope:
+            from core.ctx import evidence as authority
+            authority.global_memory(self, quote, cand["text"])
+        elif quote is not None:
+            from core.ctx import evidence as authority
+            authority.user_quote(self, quote)
+        target_store = self.global_store() if global_scope else self
+        journal_path = f"approvals/{_safe_name(cid)}.json"
+        raw_journal = self.read_text(journal_path)
+        if raw_journal:
+            journal = json.loads(raw_journal)
+            current = target_store._find_profile_item(target_store.read_profile(), journal["pid"])
+            if current and current[1].get("candidate_id") == cid:
+                self._finish_approval(journal)
+                return journal["pid"]
         cand = self._pending_candidate(cid)
         section = KIND_TO_SECTION.get(str(cand.get("kind")))
         if section is None:
@@ -784,13 +836,17 @@ class Store:
                 raise UserError("--confidence は 0.1 から 1.0 の間で指定してください")
             conf = float(confidence)
         rb = parse_date(review_by) if review_by else today() + _dt.timedelta(days=DEFAULT_REVIEW_DAYS[section])
-        target_store = self.global_store() if self.is_project and section == "constraints" else self
+        target_store = self.global_store() if global_scope else self
         profile = target_store.read_profile()
         old = None
         if supersedes:
             old = target_store._find_profile_item(profile, supersedes)
             if old is None:
                 raise UserError(f"退役させる項目がありません: {supersedes}")
+            if old[1].get("scope", "global") == "global" and not global_scope:
+                raise UserError("共通の記憶は案件内の変更で置き換えません。案件の例外は --supersedes なしで追加してください")
+            if old[1].get("scope") == "workspace" and old[1].get("workspace") != self.workspace():
+                raise UserError("他の案件の記憶は、この案件から置き換えません")
         pid = target_store.new_profile_id(section)
         item: dict = {
             "id": pid,
@@ -799,6 +855,9 @@ class Store:
             "recorded_at": today(),
             "confidence": conf,
             "review_by": rb,
+            "scope": "global" if global_scope else "workspace",
+            "workspace": "" if global_scope else (cand.get("workspace") or self.workspace()),
+            "candidate_id": cid,
         }
         key = cand.get("key") or (old[1].get("key") if old else None)
         if key:
@@ -813,34 +872,56 @@ class Store:
         profile[section].append(item)
         # validate → snapshot → os.replace. Nothing below runs when this fails, so the archive never
         # claims an item retired while it is still live in profile.toml.
+        journal = {"cid": cid, "pid": pid, "item": item, "old": old, "quote": cand.get("quote"),
+                   "global_scope": global_scope, "approval_quote": redact(quote) if quote else None,
+                   "user_input_id": (self.user_input() or {}).get("id") if quote else None}
+        self.write_text(journal_path, dumps(journal))
         target_store.write_profile(profile)
+        self._finish_approval(journal)
+        return pid
+
+    def _finish_approval(self, journal: dict) -> None:
+        """Resume the single-writer commit tail after I/O failure, without duplicating memory/history."""
+        cid, pid, item, old = (journal[k] for k in ("cid", "pid", "item", "old"))
+        target_store = self.global_store() if journal.get("global_scope") else self
+        transaction_id = f"{cid}:{pid}"
         if old:
             old_section, old_item = old
             arch = dict(old_item)
             arch["section"] = old_section
             arch["superseded_by"] = pid
             arch["superseded_at"] = now_iso()
-            _append_jsonl(target_store.archive_path, arch)
-            self.append_event({"type": "correction", "before": redact(str(old_item.get("text", ""))),
-                               "after": redact(item["text"]), "quote": cand.get("quote")})
+            if not any(rec.get("id") == old_item["id"] and rec.get("superseded_by") == pid
+                       for rec in _iter_jsonl(target_store.archive_path)):
+                _append_jsonl(target_store.archive_path, arch)
+            if not any(ev.get("transaction_id") == transaction_id for ev in self.iter_events(types={"correction"})):
+                self.append_event({"type": "correction", "before": redact(str(old_item.get("text", ""))),
+                                   "after": redact(item["text"]), "quote": journal.get("quote"),
+                                   "transaction_id": transaction_id})
         self.set_candidate_status(cid, "approved")
-        self.append_event({"type": "approval", "cid": cid, "pid": pid, "action": "approve"})
-        return pid
+        if not any(ev.get("cid") == cid and ev.get("pid") == pid for ev in self.iter_events(types={"approval"})):
+            self.append_event({"type": "approval", "cid": cid, "pid": pid, "action": "approve",
+                               "quote": journal.get("approval_quote"), "user_input_id": journal.get("user_input_id")})
+        (self.home / f"approvals/{_safe_name(cid)}.json").unlink(missing_ok=True)
 
     def reject(self, cid: str, reason: str | None = None) -> None:
         self._pending_candidate(cid)
         self.set_candidate_status(cid, "rejected", reason)
         self.append_event({"type": "approval", "cid": cid, "pid": None, "action": "reject"})
 
-    def remember(self, text: str, kind: str = "preference", key: str | None = None) -> str:
+    def remember(self, text: str, kind: str = "preference", key: str | None = None,
+                 *, global_scope: bool = False, quote: str | None = None) -> str:
         """Direct profile write by the user (source user-stated, confidence 1.0); no candidate step."""
         text = redact((text or "").strip())
         if not text:
             raise UserError("記憶する本文が空です")
+        if global_scope:
+            from core.ctx import evidence as authority
+            authority.global_memory(self, quote, text)
         section = KIND_TO_SECTION.get(kind)
         if section is None:
             raise UserError(f"種別は {'/'.join(CANDIDATE_KINDS)} のいずれかです: {kind}")
-        target_store = self.global_store() if self.is_project and section == "constraints" else self
+        target_store = self.global_store() if global_scope else self
         profile = target_store.read_profile()
         pid = target_store.new_profile_id(section)
         item: dict = {
@@ -850,6 +931,8 @@ class Store:
             "recorded_at": today(),
             "confidence": 1.0,
             "review_by": today() + _dt.timedelta(days=DEFAULT_REVIEW_DAYS[section]),
+            "scope": "global" if global_scope else "workspace",
+            "workspace": "" if global_scope else self.workspace(),
         }
         if key:
             item["key"] = str(key)
@@ -857,7 +940,9 @@ class Store:
             item["status"] = "active"
         profile[section].append(item)
         target_store.write_profile(profile)
-        self.append_event({"type": "approval", "cid": None, "pid": pid, "action": "approve"})
+        self.append_event({"type": "approval", "cid": None, "pid": pid, "action": "approve",
+                           "quote": redact(quote) if quote else None,
+                           "user_input_id": (self.user_input() or {}).get("id") if quote else None})
         return pid
 
     def capture(self, text: str, source: str | None = None) -> str:
@@ -894,11 +979,12 @@ class Store:
     def validate(self, kind: Literal["profile", "event", "candidate", "task"], obj: dict) -> list[str]:
         """Return schema errors; profile schema 2 also validates its persona contract."""
         errors: list[str] = []
-        if kind not in _SCHEMAS:
+        if kind not in _SCHEMA_FILES:
             return [f"unknown schema kind: {kind}"]
         if not isinstance(obj, dict):
             return [f"{kind}: オブジェクトではありません"]
-        _check_obj(_SCHEMAS[kind], obj, "", errors)
+        top, item_schema = _schema_tables(kind, str(REPO_ROOT))
+        _check_obj(top, obj, "", errors)
         if kind == "profile":
             schema_version = obj.get("schema")
             if isinstance(schema_version, int) and not isinstance(schema_version, bool):
@@ -922,7 +1008,7 @@ class Store:
                     if not isinstance(item, dict):
                         errors.append(f"{s}[{i}]: オブジェクトではありません")
                         continue
-                    _check_obj(_ITEM_SCHEMA, item, f"{s}[{i}].", errors)
+                    _check_obj(item_schema, item, f"{s}[{i}].", errors)
         elif kind == "task":
             crits = obj.get("criteria")
             if isinstance(crits, list):
@@ -930,5 +1016,5 @@ class Store:
                     if not isinstance(c, dict):
                         errors.append(f"criteria[{i}]: オブジェクトではありません")
                         continue
-                    _check_obj(_CRITERION_SCHEMA, c, f"criteria[{i}].", errors)
+                    _check_obj(item_schema, c, f"criteria[{i}].", errors)
         return errors

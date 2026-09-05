@@ -12,8 +12,10 @@ import runpy
 import stat
 import sys
 
+sys.dont_write_bytecode = True
 
-EVENTS = {"session-start", "pre-tool", "post-tool", "stop", "session-end"}
+
+EVENTS = {"user-input", "session-start", "pre-tool", "post-tool", "stop", "session-end"}
 ENVS = {"claude-code", "codex"}
 
 

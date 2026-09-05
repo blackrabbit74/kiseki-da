@@ -30,9 +30,24 @@ python3 install.py install --dry-run
 
 installerはKiseki DA内の安定launcherに加え、Pythonのuser scripts directoryへ`kiseki-da`（Windowsは`kiseki-da.cmd`）を配置します。shell startupやWindows PATHは自動編集しません。`kiseki-da doctor`がPATH未登録を通知した場合は、表示されたdirectoryを自分のPATHへ追加するか、表示されたlauncherの絶対pathを使います。
 
-installerは事前検査、変更予定表示、backup、staging、plugin manager実行、installed cacheの5 hook smokeの順で処理します。途中で失敗すると自動rollbackします。status 3の場合は表示されたjournalを保全し、同時変更したファイルを確認してから`kiseki-da rollback --transaction <id>`を再実行します。自動復元は利用者変更を上書きしません。
+installerは事前検査、変更予定表示、backup、staging、plugin manager実行、installed cacheの6 hook smokeの順で処理します。途中で失敗すると自動rollbackします。status 3の場合は表示されたjournalを保全し、同時変更したファイルを確認してから`kiseki-da rollback --transaction <id>`を再実行します。自動復元は利用者変更を上書きしません。
 
 旧`PA_HOME`または`~/.pa`を検出しても自動では使いません。内容を確認後、`--import-legacy`を明示した場合だけ、旧状態を残したまま新しい`KISEKI_DA_HOME`へcopyします。新旧両方に状態がある場合は自動mergeせず停止します。
+
+## 任意ディレクトリから呼ぶ
+
+`--scope user` は任意のフォルダで有効です。`--scope project --project "/absolute/project"` は登録した既存フォルダとその配下だけで有効です。どちらも配布元の場所とは独立し、日本語・空白を含むパスに対応します。プロジェクトへのファイルのコピーやGit初期化は不要です。
+
+既定の状態領域なら、次で現在のターミナルからCLIを使えます。
+
+```bash
+export PATH="$HOME/.kiseki-da/bin:$PATH"
+kiseki-da version
+```
+
+永続化する場合は上のexport行を自分の `~/.zshrc` に追加します。PATHを変更しない場合は `"$HOME/.kiseki-da/bin/kiseki-da" doctor` のように絶対パスで呼べます。`KISEKI_DA_HOME`を変更した場合は、その場所の `bin` を使います。導入完了時にも実際のlauncherとPATH設定例を表示します。
+
+1チャット1案件を基本とし、案件のフォルダから新しいセッションを始めてください。新規カードと記憶の所属は、そのセッションを始めたフォルダに固定します。共通の記憶への昇格には「全案件で『本文』を覚えて」など、ユーザー本人の直接の指示と `--global` が必要です。
 
 ## Project scope
 

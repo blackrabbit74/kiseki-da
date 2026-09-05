@@ -85,7 +85,7 @@
 
 **防ごうとする失敗**: 散文ルールの腐敗、指示の過負荷、hook の堆積（LifeOS: 事故ごとに手順が積み上がり 56 hook）、hook のクラッシュによる停止、環境更新での hook 破損。
 
-**採用する機構**: 5 hook（session-start / pre-tool / post-tool / stop / session-end、AD-7）、拒否リスト、スキーマ検証、対話方針 ≤60 行。
+**採用する機構**: 6 hook（session-start / user-input / pre-tool / post-tool / stop / session-end、AD-7）、拒否リスト、スキーマ検証、対話方針 ≤60 行。
 
 **採用しない機構**: プロンプトごとの分類器 hook、書式バナー強制、ナッジ、ドリフト警告、hook 内の LLM 推論、229 のワークフロー散文。
 
