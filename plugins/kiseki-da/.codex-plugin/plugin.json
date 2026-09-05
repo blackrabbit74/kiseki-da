@@ -1,6 +1,6 @@
 {
   "name": "kiseki-da",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "description": "Kiseki DA is a lightweight, evidence-aware Digital Assistant harness.",
   "author": {
     "name": "Navigator",
@@ -9,14 +9,21 @@
   "homepage": "https://github.com/blackrabbit74/kiseki-da",
   "repository": "https://github.com/blackrabbit74/kiseki-da",
   "license": "MIT",
-  "keywords": ["personal-ai", "verification", "memory", "persona"],
+  "keywords": [
+    "personal-ai",
+    "verification",
+    "memory",
+    "persona"
+  ],
   "interface": {
     "displayName": "Kiseki DA",
     "shortDescription": "Personal AI with bounded memory and evidence gates.",
     "longDescription": "A local Digital Assistant harness that adds scoped context, approved memory, task evidence, safety hooks, and a compact character profile.",
     "developerName": "Navigator",
     "category": "Productivity",
-    "capabilities": ["Interactive"],
+    "capabilities": [
+      "Interactive"
+    ],
     "websiteURL": "https://github.com/blackrabbit74/kiseki-da",
     "privacyPolicyURL": "https://github.com/blackrabbit74/kiseki-da/blob/main/PRIVACY.md",
     "defaultPrompt": [

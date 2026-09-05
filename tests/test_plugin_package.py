@@ -34,7 +34,7 @@ class PluginPackageTest(unittest.TestCase):
             data[PLUGIN / ".claude-plugin" / "plugin.json"]["version"],
             data[ROOT / ".claude-plugin" / "marketplace.json"]["version"],
         }
-        self.assertEqual(versions, {"0.1.0-beta.1"})
+        self.assertEqual(versions, {(ROOT / "VERSION").read_text(encoding="utf-8").strip()})
         self.assertNotIn("hooks", data[PLUGIN / ".codex-plugin" / "plugin.json"])
         self.assertEqual(data[PLUGIN / ".claude-plugin" / "plugin.json"]["hooks"],
                          "./hooks/claude-code.json")

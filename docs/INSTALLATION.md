@@ -3,17 +3,42 @@
 ## 前提
 
 - Python 3.11〜3.14
-- Claude CodeまたはCodexのlocal CLI
+- CodexのMacアプリ、またはClaude Code / Codexのlocal CLI
 - GitHubへ接続できること（clone、install、update時）
 
-`v0.1.0-beta.1`の対応対象はmacOS localです。Linux localはbeta利用中に検証を続けます。Windows 11 nativeとWSL2は検証待ちのため対応対象外です。将来検証用コードが含まれていても、動作保証を意味しません。
+`v0.1.0-beta.2`の対応対象はmacOS localです。Linux localはbeta利用中に検証を続けます。Windows 11 nativeとWSL2は検証待ちのため対応対象外です。将来検証用コードが含まれていても、動作保証を意味しません。
+
+## Codexアプリだけを使っている場合
+
+ターミナルでCodexを起動した経験は不要です。v0.1.0-beta.2から、インストーラーは次の順にCLIを探します。doctor・update・uninstallでも同じ探索を使います。
+
+1. `KISEKI_DA_CODEX_COMMAND` で利用者が明示指定したコマンド
+2. ターミナルのPATH上の `codex`
+3. macOSの `/Applications`、続いて `~/Applications` にある `ChatGPT.app` / `Codex.app` の `Contents/Resources/codex`
+
+見つかった実行ファイルはPython・CLIのversion・plugin managerの機能を通常どおり検査します。PATHやshell startupを自動変更しません。アプリを別の場所へ置いている場合は `KISEKI_DA_CODEX_COMMAND` に引用符付きの絶対パスを指定してください。
+
+```bash
+KISEKI_DA_CODEX_COMMAND='"/アプリの保存先/ChatGPT.app/Contents/Resources/codex"' \
+  python3 install.py install --host codex --scope user
+```
+
+`codex のCLIが見つかりません` と表示されたbeta.1からやり直す場合、同じcloneの中で次を実行します。公開タグを指定したcloneの `detached HEAD` 表示は、このインストール用途では問題ありません。手元に編集がある場合は退避してから切り替えてください。
+
+```bash
+git fetch origin tag v0.1.0-beta.2
+git switch --detach v0.1.0-beta.2
+python3 install.py install --host codex --scope user
+```
+
+インストールの失敗後に `kiseki-da` が見つからないのは、まだlauncherが作られていないためです。先に上のinstallを完了してください。導入後の利用はCodexアプリの `Local` 環境で行えます。
 
 ## 導入
 
-GitHub ReleasesからZIPと`SHA256SUMS`を別々に保存し、SHA-256を照合してから展開します。macOS/Linuxは`shasum -a 256 kiseki-da-0.1.0-beta.1.zip`の結果を`SHA256SUMS`と比較します。downloadしたscriptをshellへpipeして実行しません。cloneする場合は公開済みtagを指定します。
+GitHub ReleasesからZIPと`SHA256SUMS`を別々に保存し、SHA-256を照合してから展開します。macOS/Linuxは`shasum -a 256 kiseki-da-0.1.0-beta.2.zip`の結果を`SHA256SUMS`と比較します。downloadしたscriptをshellへpipeして実行しません。cloneする場合は公開済みtagを指定します。
 
 ```bash
-git clone --branch v0.1.0-beta.1 --depth 1 https://github.com/blackrabbit74/kiseki-da.git
+git clone --branch v0.1.0-beta.2 --depth 1 https://github.com/blackrabbit74/kiseki-da.git
 cd kiseki-da
 python3 install.py install --dry-run
 python3 install.py install

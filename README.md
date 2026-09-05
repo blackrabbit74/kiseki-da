@@ -2,7 +2,7 @@
 
 **Kiseki DA（Digital Assistant）** は、Claude Code / Codex に承認制の記憶、証拠付きタスク完了、安全hook、プロジェクト別キャラクターを追加する軽量な個人AIハーネスです。Python 3.11+ の標準ライブラリだけで動き、外部telemetryはありません。
 
-> Status: `v0.1.0-beta.1`（macOS local向け公開beta）。2026-09-05の案件分離・指示優先・証拠照合の修正を含みます。
+> Status: `v0.1.0-beta.2`（macOS local向け公開beta）。2026-09-05の案件分離・指示優先・証拠照合の修正を含みます。
 
 ## 対応範囲
 
@@ -10,28 +10,27 @@
 - OS: macOS local。Linux localはbeta運用中に検証を継続
 - State: `KISEKI_DA_HOME`（既定 `~/.kiseki-da`）
 - 対象外: Windows 11 native、WSL2、cloud session、Cursor、無人実行、人格による権限変更
-- App: Claude DesktopはCodeタブのlocal session。Codex Appはprojectの`Local`環境のみ（管理Worktreeはbeta.1対象外）
+- App: Claude DesktopはCodeタブのlocal session。Codex Appはprojectの`Local`環境のみ（管理Worktreeはbeta対象外）
 
 ## インストールして好きなフォルダで使う
 
-macOS、Python 3.11〜3.14、Claude CodeまたはCodex CLIが必要です。Gitリポジトリでないフォルダでも使えます。
+macOS、Python 3.11〜3.14と、CodexアプリまたはClaude Code / Codex CLIが必要です。Codexアプリだけを使っていても導入でき、同梱CLIを自動検出します。Gitリポジトリでないフォルダでも使えます。
 
 ```bash
-git clone --branch v0.1.0-beta.1 --depth 1 https://github.com/blackrabbit74/kiseki-da.git
+git clone --branch v0.1.0-beta.2 --depth 1 https://github.com/blackrabbit74/kiseki-da.git
 python3 kiseki-da/install.py install --host codex --scope user
+```
+
+導入が正常終了した後、CLIを使うターミナルで次を実行します。
+
+```bash
 export PATH="$HOME/.kiseki-da/bin:$PATH"
 kiseki-da doctor
 ```
 
 Claude Codeだけに導入するなら `--host claude-code`、両方なら `--host all` を指定します。初回の利用者情報・キャラクター設定を確認してください。上の `export` は現在のターミナルに適用されます。常用する場合は同じ行を `~/.zshrc` に追加します。
 
-導入後は、使いたいフォルダへ移動して `codex` または `claude` を起動します。配布元のフォルダへ戻る必要はありません。Codex Appでは使いたいフォルダを `Local` で開きます。
-
-```bash
-mkdir -p "$HOME/work/新しい案件"
-cd "$HOME/work/新しい案件"
-codex
-```
+導入後もCodexアプリで使えます。アプリを再起動し、使いたいフォルダを `Local` で開いてください。ターミナルからCodexを起動する必要はありません。`codex` / `claude` コマンドを導入済みなら、使いたいフォルダからCLIを起動することもできます。
 
 Codexを再起動し、`/hooks`でKiseki DAのhookを確認・trustした後、`kiseki-da doctor --confirm-codex-trust`で確認済みとして記録します。インストーラーだけではtrust済みになりません。
 

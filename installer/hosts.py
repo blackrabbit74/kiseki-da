@@ -16,6 +16,13 @@ from .constants import MARKETPLACE_ID, MARKETPLACE_REPO, MIN_VERSIONS, PLUGIN_ID
 from .util import InstallerError, parse_version
 
 
+def _codex_app_candidates() -> list[Path]:
+    """Known local Mac app locations; never search the current project or launch a shell."""
+    return [directory / app / "Contents" / "Resources" / "codex"
+            for directory in (Path("/Applications"), Path.home() / "Applications")
+            for app in ("ChatGPT.app", "Codex.app")]
+
+
 def _executable(host: str) -> list[str]:
     key = "KISEKI_DA_CLAUDE_COMMAND" if host == "claude-code" else "KISEKI_DA_CODEX_COMMAND"
     configured = os.environ.get(key)
@@ -24,7 +31,15 @@ def _executable(host: str) -> list[str]:
         if not values:
             raise InstallerError(f"{key} が空です。")
         return values
-    return ["claude" if host == "claude-code" else "codex"]
+    command = "claude" if host == "claude-code" else "codex"
+    resolved = shutil.which(command)
+    if resolved:
+        return [resolved]
+    if host == "codex" and sys.platform == "darwin":
+        for candidate in _codex_app_candidates():
+            if candidate.is_file() and os.access(candidate, os.X_OK):
+                return [str(candidate)]
+    return [command]
 
 
 def run_command(argv: Sequence[str]) -> subprocess.CompletedProcess[str]:
@@ -164,6 +179,13 @@ class HostManager:
         executable = self.base[0]
         resolved_text = str(Path(executable).resolve()) if Path(executable).is_file() else shutil.which(executable)
         if not resolved_text:
+            if self.host == "codex" and sys.platform == "darwin" and not os.environ.get("KISEKI_DA_CODEX_COMMAND"):
+                raise InstallerError(
+                    "CodexのCLIが見つかりません。/Applications または ~/Applications の"
+                    "ChatGPT.app / Codex.appにも実行ファイルがありません。アプリを導入するか、"
+                    "KISEKI_DA_CODEX_COMMANDにCLIのパスを指定してください。"
+                    "手順: docs/INSTALLATION.md「Codexアプリだけを使っている場合」"
+                )
             raise InstallerError(f"{self.host} のCLIが見つかりません: {executable}")
         resolved = Path(resolved_text).resolve(strict=False)
         is_wsl = bool(os.environ.get("WSL_DISTRO_NAME") or "microsoft" in platform.release().casefold())

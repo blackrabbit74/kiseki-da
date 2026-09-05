@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-beta.2 - 2026-09-05
+
+- Macのターミナルにcodexが未登録でも、ChatGPT.app / Codex.appの同梱CLIを自動検出するよう修正。install・doctor・update・uninstallへ適用。
+- 明示的なコマンド指定とPATH上のCLIを優先し、アプリ内の実行ファイルにも通常のversion・plugin検査を適用。
+- アプリ利用者向けの前提・再インストール手順と、CLIが見つからない場合の案内を追加。
+
 ## 0.1.0-beta.1 - 2026-09-05
 
 - pa-harnessをKiseki DA（Digital Assistant）として再構成。

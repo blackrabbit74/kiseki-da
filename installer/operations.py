@@ -797,7 +797,7 @@ def install(
         "model_preview": model_preview,
         "security_settings": host_security,
         "security_changes": host_security_mod.preview(hosts) if host_security == "recommended" else [],
-        "limitations": (["Codex Appのproject scopeはv0.1.0-beta.1ではLocal環境限定です。管理Worktree/Cloudではactivateしません。"]
+        "limitations": (["Codex Appのproject scopeは公開betaではLocal環境限定です。管理Worktree/Cloudではactivateしません。"]
                         if scope == "project" and "codex" in hosts else []),
     }
     if dry_run and not allow_host_probes:

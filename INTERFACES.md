@@ -6,7 +6,7 @@
 
 - Display: `Kiseki DA`（Digital Assistant）
 - Slug / CLI / plugin / marketplace: `kiseki-da`
-- Package version: `0.1.0-beta.1`
+- Package version: `0.1.0-beta.2`
 - Profile schema: `2`（schema 1はread-compatible）
 - State env: `KISEKI_DA_HOME`; default `~/.kiseki-da`。GUI hook用location pointerは既定`~/.kiseki-da-location`
 
@@ -64,3 +64,7 @@ runtimeと両manifestのversionは一致させる。profile readはschema 1/2に
 - 完了証拠は実行ID・案件・実行日時・完全入力hash・成功状態で照合する。Read対象の変更や後続変更で証拠を失効させ、`last`で他sessionへ戻らない。Codexの文字列出力は終了コードの証拠にせず、`verify run`で構造化した証拠を記録できる。
 - 常駐は基本方針を含め2,500推定tokens・9,000文字以内。カードを丸ごと捨てず要点と固定CLI参照先を保持する。必須制約を省略した場合は全ページの取得後に変更を通す。personaは220推定tokens以内。
 - 承認保存はintent journalと元候補IDで再試行できる。実測していない品質指標はnull。並行writerの強い整合性、実LLMの品質比較、Windows/WSL/Cloud/管理Worktree対応は未実施または対象外。
+
+## 0.1.0-beta.2 のCLI検出
+
+Codexの明示指定、PATH、Macアプリ同梱CLIの順で解決する。fallbackはmacOSの既知のアプリ配置先だけを調べ、作業ディレクトリの探索やPATHの変更を行わない。通常のpreflightを通した同じ実行ファイルでnative plugin操作を行う。beta.1の対応範囲・権限・記憶・hookの契約は継続する。
