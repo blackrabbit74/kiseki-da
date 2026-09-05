@@ -24,6 +24,8 @@ from pathlib import Path
 
 host = sys.argv[1]
 args = sys.argv[2:]
+if host == "claude-code" and os.environ.get("FAKE_PLUGIN_PATH"):
+    os.environ["FAKE_PLUGIN_PATH"] = str(Path(os.environ["FAKE_PLUGIN_PATH"]).parent / "claude-code" / "kiseki-da")
 state_path = Path(os.environ["FAKE_MANAGER_STATE"])
 try:
     state = json.loads(state_path.read_text(encoding="utf-8"))
@@ -188,7 +190,7 @@ class InstallerTests(unittest.TestCase):
         shutil.copytree(ROOT / ".agents", target / ".agents")
         version_paths = (
             target / ".claude-plugin" / "marketplace.json",
-            target / "plugins" / "kiseki-da" / ".claude-plugin" / "plugin.json",
+            target / "plugins" / "claude-code" / "kiseki-da" / ".claude-plugin" / "plugin.json",
             target / "plugins" / "kiseki-da" / ".codex-plugin" / "plugin.json",
         )
         for manifest in version_paths:

@@ -4,9 +4,14 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 from pathlib import Path
 import subprocess
 import sys
+import tarfile
+import tempfile
+import zipfile
+import gzip
 
 from publication_audit import audit
 
@@ -20,6 +25,45 @@ def _run(args: list[str], *, stdout=None) -> None:
 
 def _digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def write_archives(root: Path, archives: list[Path], prefix: str) -> None:
+    """Materialize marketplace links from a tracked snapshot, never the worktree."""
+    snapshot = subprocess.run(["git", "archive", "--format=tar", "HEAD"], cwd=root,
+                              capture_output=True, check=True).stdout
+    with tempfile.TemporaryDirectory(prefix="kiseki-release-") as raw:
+        stage = Path(raw).resolve()
+        with tarfile.open(fileobj=io.BytesIO(snapshot)) as bundle:
+            bundle.extractall(stage, filter="data")
+        # Only links to regular tracked trees inside this snapshot are supported.
+        links = [p for p in stage.rglob("*") if p.is_symlink()]
+        for link in links:
+            target = link.resolve(strict=True)
+            target.relative_to(stage)
+            if target.is_dir() and any(p.is_symlink() for p in target.rglob("*")):
+                raise ValueError(f"Nested release symlink: {link.relative_to(stage)}")
+            if target == stage or target in link.parents:
+                raise ValueError(f"Recursive release symlink: {link.relative_to(stage)}")
+        def files(directory: Path):
+            for path in sorted(directory.iterdir()):
+                if path.is_dir():
+                    yield from files(path)
+                else:
+                    yield path
+        with zipfile.ZipFile(archives[0], "w", compression=zipfile.ZIP_DEFLATED) as output:
+            for path in files(stage):
+                info = zipfile.ZipInfo(prefix + path.relative_to(stage).as_posix(), (1980, 1, 1, 0, 0, 0))
+                info.external_attr = (0o100755 if path.stat().st_mode & 0o111 else 0o100644) << 16
+                info.compress_type = zipfile.ZIP_DEFLATED
+                output.writestr(info, path.read_bytes())
+        with archives[1].open("wb") as stream, gzip.GzipFile(filename="", fileobj=stream, mode="wb", mtime=0) as gz:
+            with tarfile.open(fileobj=gz, mode="w", dereference=True) as output:
+                for path in files(stage):
+                    info = output.gettarinfo(str(path), prefix + path.relative_to(stage).as_posix())
+                    info.uid = info.gid = info.mtime = 0
+                    info.uname = info.gname = ""
+                    with path.open("rb") as content:
+                        output.addfile(info, content)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -56,10 +100,7 @@ def main(argv: list[str] | None = None) -> int:
     out.mkdir(exist_ok=True)
     prefix = f"kiseki-da-{version}/"
     archives = [out / f"kiseki-da-{version}.zip", out / f"kiseki-da-{version}.tar.gz"]
-    with archives[0].open("wb") as stream:
-        _run(["git", "archive", "--format=zip", f"--prefix={prefix}", "HEAD"], stdout=stream)
-    with archives[1].open("wb") as stream:
-        _run(["git", "archive", "--format=tar.gz", f"--prefix={prefix}", "HEAD"], stdout=stream)
+    write_archives(ROOT, archives, prefix)
     sums = out / "SHA256SUMS"
     sums.write_text("".join(f"{_digest(path)}  {path.name}\n" for path in archives), encoding="utf-8")
     marker = out / "CANDIDATE_ONLY.txt"

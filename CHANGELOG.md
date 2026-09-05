@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-beta.3 - 2026-09-05
+
+- ClaudeとCodexのplugin rootを分離し、ClaudeがCodex用hookを二重読込してツール実行をブロックする障害を修正。
+- source/cache検証にhost混入検出を追加し、installed smokeで実際のhook command・argsを実行するよう変更。
+- 共通runtimeは原本を共有し、release archiveではリンクを実体化して自己完結させる。
+
 ## 0.1.0-beta.2 - 2026-09-05
 
 - Macのターミナルにcodexが未登録でも、ChatGPT.app / Codex.appの同梱CLIを自動検出するよう修正。install・doctor・update・uninstallへ適用。

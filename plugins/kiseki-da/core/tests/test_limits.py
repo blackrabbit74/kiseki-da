@@ -83,7 +83,8 @@ class LimitsTestCase(unittest.TestCase):
         self.assertEqual(bad, [])
 
     def test_plugin_hooks_cover_exact_normalized_set(self):
-        for filename in ("hooks/hooks.json", "hooks/claude-code.json"):
+        filenames = ("hooks/hooks.json",) if (ROOT / ".codex-plugin").exists() else ("hooks/claude-code.json",)
+        for filename in filenames:
             path = ROOT / filename
             data = json.loads(path.read_text(encoding="utf-8"))
             names = set(data["hooks"])

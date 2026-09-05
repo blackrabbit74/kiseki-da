@@ -12,13 +12,16 @@ Kiseki DAが所有するのは、状態、文脈選択、タスクカード、�
 
 ```text
 GitHub marketplace
-  └─ plugins/kiseki-da/
-       ├─ .claude-plugin/plugin.json
+  ├─ plugins/kiseki-da/                 # Codex入口・共通runtime原本
        ├─ .codex-plugin/plugin.json
-       ├─ hooks/{claude-code.json,hooks.json}
+       ├─ hooks/hooks.json
        ├─ scripts/hook_entry.py
        ├─ LICENSE
        └─ core/ctx/*
+  └─ plugins/claude-code/kiseki-da/     # Claude専用入口
+       ├─ .claude-plugin/plugin.json
+       ├─ hooks/claude-code.json
+       └─ core, scripts, evals, state.example, LICENSE → 共通原本
 
 KISEKI_DA_HOME（既定 ~/.kiseki-da）
   ├─ profile.toml
@@ -35,6 +38,8 @@ KISEKI_DA_HOME（既定 ~/.kiseki-da）
 ```
 
 plugin cacheは交換可能で、利用者状態を保存しない。installerは同じreleaseのruntimeをversion付きで配置し、Claude/Codexのnative plugin managerを利用する。
+
+Claudeは既定の`hooks/hooks.json`とmanifest指定のhookを併合するため、両hostを同じplugin rootから配布しない。共通ファイルはmarketplace内の相対symlinkで共有し、Claudeのmarketplace installで実ファイルとしてcacheへ取り込む。release archiveも追跡済みsnapshotからsymlinkを実体化する。開発時はmarketplace経由で導入する（外部リンクを含む`--plugin-dir`は使用しない）。
 
 ## セッションデータフロー
 

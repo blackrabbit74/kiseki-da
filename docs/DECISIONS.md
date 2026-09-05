@@ -21,3 +21,9 @@
 - 2026-09-05 決定: Codexの文字列stdoutだけでは成功判定しない既存の厳格な規則を保持し、verify runに実行ID・案件・完全入力hashを追加する — 理由: 出力本文を終了状態と誤認しない — 廃止条件: ホストが構造化された成功状態を保証するとき。
 
 - 2026-09-05 決定: beta.2では、Codexアプリのみ利用しているMacで同梱CLIを自動検出する。明示指定とPATHを優先し、既知のアプリ配置先の実行可能ファイルだけをfallbackにする — 理由: codex未登録で初回導入が止まった実例を解消する — 廃止条件: ホストがアプリCLIの公式検出APIを提供したとき。
+# 2026-09-05: host別plugin root
+
+- 決定: Codexは`plugins/kiseki-da`、Claudeは`plugins/claude-code/kiseki-da`から配布する。共通runtimeは前者に一元化し、後者からmarketplace内の相対symlinkで参照する。
+- 理由: Claudeの既定`hooks/hooks.json`はmanifestの別hook指定でも読み込まれる。同一rootに置くとCodex起動コマンドまで実行され、未定義変数によるPython exit 2がPreToolUseをブロックする。
+- 検証: source/cache検証で別host定義と二重読込を拒否し、smokeはhost固有の環境変数だけで実hook commandを実行する。release archiveはリンクを実体化し、配布後も自己完結させる。
+- 廃止条件: 両hostが明示的な排他的hook指定を公式に保証し、実hostの回帰検証で単一rootが安全と確認された場合。

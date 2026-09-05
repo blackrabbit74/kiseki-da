@@ -94,7 +94,7 @@ def preflight_source(source: Path, hosts: list[str]) -> dict[str, Any]:
     documents: dict[str, dict] = {}
     required = {
         **manifest_paths,
-        "claude-plugin": source / "plugins" / "kiseki-da" / ".claude-plugin" / "plugin.json",
+        "claude-plugin": source / "plugins" / "claude-code" / "kiseki-da" / ".claude-plugin" / "plugin.json",
         "codex-plugin": source / "plugins" / "kiseki-da" / ".codex-plugin" / "plugin.json",
     }
     for name, path in required.items():
@@ -124,9 +124,10 @@ def preflight_source(source: Path, hosts: list[str]) -> dict[str, Any]:
     claude_hook_value = documents["claude-plugin"].get("hooks")
     if not isinstance(claude_hook_value, str):
         raise InstallerError("Claude plugin manifestのhooks pathがありません。")
-    claude_hook = (plugin_root / claude_hook_value).resolve(strict=False)
+    claude_root = source / "plugins" / "claude-code" / "kiseki-da"
+    claude_hook = (claude_root / claude_hook_value).resolve(strict=False)
     try:
-        claude_hook.relative_to(plugin_root.resolve())
+        claude_hook.relative_to(claude_root.resolve())
     except ValueError:
         raise InstallerError("Claude hook pathがplugin外を指しています。") from None
     hook_files = [claude_hook, plugin_root / "hooks" / "hooks.json"]
@@ -139,6 +140,13 @@ def preflight_source(source: Path, hosts: list[str]) -> dict[str, Any]:
             raise InstallerError(f"hook定義はJSONオブジェクトである必要があります: {hook_file}")
     if not (plugin_root / "scripts" / "hook_entry.py").is_file():
         raise InstallerError("plugin hook launcherがありません。")
+    for host, root in (("claude-code", claude_root), ("codex", plugin_root)):
+        _validate_installed_plugin(root, host, version)
+    codex_entry = next((row for row in documents["codex"].get("plugins", [])
+                        if isinstance(row, dict) and row.get("name") == PLUGIN_ID), {})
+    if (claude_entry.get("source") != "./plugins/claude-code/kiseki-da"
+            or codex_entry.get("source", {}).get("path") != "./plugins/kiseki-da"):
+        raise InstallerError("marketplaceのhost別plugin sourceが不正です。")
     return {"version": version, "source": str(source), "manifests": [str(path) for path in required.values()]}
 
 
@@ -575,6 +583,17 @@ def _validate_installed_plugin(path: Path, host: str, version: str) -> None:
         raise InstallerError(f"{host} installed plugin versionが不一致です: {manifest}")
     if not (path / "scripts" / "hook_entry.py").is_file():
         raise InstallerError(f"{host} installed plugin hook launcherがありません: {path}")
+    if not (path / "core" / "ctx" / "cli.py").is_file():
+        raise InstallerError(f"{host} installed plugin runtimeがありません: {path}")
+    foreign_manifest = ".claude-plugin" if host == "codex" else ".codex-plugin"
+    if (path / foreign_manifest / "plugin.json").exists():
+        raise InstallerError(f"{host} pluginに別hostのmanifestが混入しています: {path}")
+    if host == "claude-code":
+        # Claude merges its implicit hooks/hooks.json with manifest hooks.
+        if (path / "hooks" / "hooks.json").exists():
+            raise InstallerError(f"Claude pluginに既定hookが混入しています（二重読込）: {path}")
+        if data.get("hooks") != "./hooks/claude-code.json":
+            raise InstallerError(f"Claude pluginのhooks pathが不正です: {path}")
     hook = path / "hooks" / ("hooks.json" if host == "codex" else "claude-code.json")
     try:
         hook_data = json.loads(hook.read_text(encoding="utf-8"))
@@ -582,6 +601,23 @@ def _validate_installed_plugin(path: Path, host: str, version: str) -> None:
         raise InstallerError(f"{host} installed hook定義を読めません: {hook}: {exc}") from None
     if not isinstance(hook_data, dict) or not isinstance(hook_data.get("hooks"), dict):
         raise InstallerError(f"{host} installed hook定義の形式が不正です: {hook}")
+    expected = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "SessionEnd"}
+    if host == "claude-code":
+        expected.add("PostToolUseFailure")
+    if set(hook_data["hooks"]) != expected:
+        raise InstallerError(f"{host} installed hook eventが不正です: {hook}")
+    for event, groups in hook_data["hooks"].items():
+        if (not isinstance(groups, list) or len(groups) != 1
+                or not isinstance(groups[0], dict)
+                or not isinstance(groups[0].get("hooks"), list) or len(groups[0]["hooks"]) != 1):
+            raise InstallerError(f"{host} {event} hookは一つだけ必要です: {hook}")
+        handler = groups[0]["hooks"][0]
+        if not isinstance(handler, dict) or handler.get("type") != "command":
+            raise InstallerError(f"{host} {event} hook commandが不正です: {hook}")
+        text = json.dumps(handler)
+        foreign_root = "${CLAUDE_PLUGIN_ROOT}" if host == "codex" else "${PLUGIN_ROOT}"
+        if foreign_root in text:
+            raise InstallerError(f"{host} {event} hookに別hostの変数があります: {hook}")
 
 
 def _inventory_summary(inventory) -> dict[str, Any]:
@@ -680,7 +716,7 @@ def _hook_python(host: str) -> list[str]:
 
 
 def _smoke_installed_plugins(host_ownership: dict[str, dict[str, Any]], version: str) -> None:
-    """Exercise all six wrapper routes from the manager-installed plugin root."""
+    """Execute the installed hook definitions with only that host's variables."""
     with tempfile.TemporaryDirectory(prefix="kiseki-da-installed-hook-smoke-") as raw:
         base = Path(raw)
         for host, ownership in host_ownership.items():
@@ -694,8 +730,11 @@ def _smoke_installed_plugins(host_ownership: dict[str, dict[str, Any]], version:
             work.mkdir(parents=True)
             env = os.environ.copy()
             env["KISEKI_DA_HOME"] = str(state)
-            env["PLUGIN_ROOT"] = str(plugin)
-            env["CLAUDE_PLUGIN_ROOT"] = str(plugin)
+            env.pop("PLUGIN_ROOT", None)
+            env.pop("CLAUDE_PLUGIN_ROOT", None)
+            env["CLAUDE_PLUGIN_ROOT" if host == "claude-code" else "PLUGIN_ROOT"] = str(plugin)
+            hook_file = plugin / "hooks" / ("claude-code.json" if host == "claude-code" else "hooks.json")
+            definitions = json.loads(hook_file.read_text(encoding="utf-8"))["hooks"]
             python = _hook_python(host)
             if not python:
                 raise InstallerError(f"{host} hookのPythonを解決できません。")
@@ -717,8 +756,21 @@ def _smoke_installed_plugins(host_ownership: dict[str, dict[str, Any]], version:
             )
             for event, fields, expected in cases:
                 payload = {"session_id": f"installed-smoke-{host}", "cwd": str(work), **fields}
+                handler = definitions[fields["hook_event_name"]][0]["hooks"][0]
+                if host == "claude-code":
+                    replacements = {"${user_config.python_executable}": python[0],
+                                    "${CLAUDE_PLUGIN_ROOT}": str(plugin)}
+                    def expand(value: str) -> str:
+                        for key, replacement in replacements.items():
+                            value = value.replace(key, replacement)
+                        return value
+                    invocation = [expand(handler["command"]), *map(expand, handler.get("args", []))]
+                else:
+                    invocation = handler["commandWindows" if os.name == "nt" else "command"]
+                    if os.name == "nt":
+                        invocation = invocation.replace("${PLUGIN_ROOT}", str(plugin))
                 result = subprocess.run(
-                    [*python, str(plugin / "scripts" / "hook_entry.py"), event, host],
+                    invocation, shell=host == "codex", cwd=work,
                     input=json.dumps(payload), capture_output=True, text=True,
                     encoding="utf-8", errors="replace", env=env, check=False,
                 )

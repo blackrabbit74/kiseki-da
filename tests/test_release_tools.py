@@ -5,6 +5,12 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+import subprocess
+import sys
+import tarfile
+import zipfile
+import os
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,6 +25,45 @@ def load(name: str, path: Path):
 
 
 class PublicationAuditTest(unittest.TestCase):
+    @unittest.skipIf(os.name == "nt", "symlink checkout requires Windows Developer Mode")
+    def test_release_materializes_shared_runtime_from_tracked_snapshot(self):
+        with mock.patch.object(sys, "path", [str(ROOT / "tools"), *sys.path]):
+            module = load("build_release_materialize", ROOT / "tools" / "build_release.py")
+        with tempfile.TemporaryDirectory() as raw:
+            base = Path(raw)
+            repo = base / "repo"
+            repo.mkdir()
+            subprocess.run(["git", "init", "-q", str(repo)], check=True)
+            shared = repo / "shared"
+            shared.mkdir()
+            (shared / "runtime.py").write_text("print('tracked')\n")
+            plugin = repo / "plugin"
+            plugin.mkdir()
+            (plugin / "core").symlink_to("../shared", target_is_directory=True)
+            subprocess.run(["git", "add", "."], cwd=repo, check=True)
+            subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.com",
+                            "-c", "commit.gpgsign=false", "commit", "-qm", "fixture"], cwd=repo, check=True)
+            (shared / "runtime.py").write_text("uncommitted\n")
+            (shared / "private.txt").write_text("untracked\n")
+            archives = [base / "source.zip", base / "source.tar.gz"]
+            module.write_archives(repo, archives, "release/")
+            first = [p.read_bytes() for p in archives]
+            module.write_archives(repo, archives, "release/")
+            self.assertEqual(first, [p.read_bytes() for p in archives])
+            with zipfile.ZipFile(archives[0]) as bundle:
+                self.assertEqual(bundle.read("release/plugin/core/runtime.py"), b"print('tracked')\n")
+                self.assertFalse(any("private.txt" in name for name in bundle.namelist()))
+                self.assertTrue(all((item.external_attr >> 16) & 0o170000 == 0o100000
+                                    for item in bundle.infolist()))
+            with tarfile.open(archives[1]) as bundle:
+                self.assertTrue(all(item.isfile() for item in bundle.getmembers()))
+                self.assertEqual(bundle.extractfile("release/plugin/core/runtime.py").read(), b"print('tracked')\n")
+            verifier = load("verify_release_materialize", ROOT / "tools" / "verify_release_assets.py")
+            with mock.patch.object(verifier, "ROOT", repo):
+                tracked = verifier._tracked()
+            self.assertEqual(set(tracked), {"shared/runtime.py", "plugin/core/runtime.py"})
+            self.assertEqual(tracked["shared/runtime.py"], tracked["plugin/core/runtime.py"])
+
     def test_publication_audit_passes(self):
         module = load("publication_audit", ROOT / "tools" / "publication_audit.py")
         result = module.audit()

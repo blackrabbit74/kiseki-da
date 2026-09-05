@@ -13,6 +13,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN = ROOT / "plugins" / "kiseki-da"
+CLAUDE_PLUGIN = ROOT / "plugins" / "claude-code" / "kiseki-da"
 BANNED_NAMES = {".DS_Store", "HANDOFF.md", "HANDOFF.json", "BUILD_BRIEF.md", "PROMPT.md"}
 BANNED_PARTS = {"build", "__pycache__", ".pytest_cache", "release", "dist"}
 PRIVATE_PATTERNS = (
@@ -123,7 +124,7 @@ def audit(gates_path: Path | None = None) -> dict:
         version = version_path.read_text(encoding="utf-8").strip()
     manifests = [
         PLUGIN / ".codex-plugin" / "plugin.json",
-        PLUGIN / ".claude-plugin" / "plugin.json",
+        CLAUDE_PLUGIN / ".claude-plugin" / "plugin.json",
         ROOT / ".claude-plugin" / "marketplace.json",
     ]
     for path in manifests:

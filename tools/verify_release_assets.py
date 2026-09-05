@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import posixpath
 from pathlib import Path, PurePosixPath
 import subprocess
 import tarfile
@@ -24,18 +25,35 @@ def _sha256(path: Path) -> str:
 
 def _tracked() -> dict[str, str]:
     result = subprocess.run(
-        ["git", "ls-tree", "-r", "--name-only", "-z", "HEAD"],
+        ["git", "ls-tree", "-r", "-z", "HEAD"],
         cwd=ROOT,
         capture_output=True,
         check=True,
     )
-    paths = [item.decode("utf-8") for item in result.stdout.split(b"\0") if item]
+    entries = [item.decode("utf-8").split("\t", 1) for item in result.stdout.split(b"\0") if item]
     hashes: dict[str, str] = {}
-    for path in paths:
+    links: dict[str, str] = {}
+    for metadata, path in entries:
         blob = subprocess.run(
             ["git", "show", f"HEAD:{path}"], cwd=ROOT, capture_output=True, check=True,
         ).stdout
-        hashes[path] = hashlib.sha256(blob).hexdigest()
+        if metadata.startswith("120000 "):
+            target = posixpath.normpath(posixpath.join(posixpath.dirname(path), blob.decode("utf-8")))
+            if target.startswith(("/", "../")) or target == "..":
+                raise ValueError(f"marketplace外のsymlink: {path}")
+            links[path] = target
+        else:
+            hashes[path] = hashlib.sha256(blob).hexdigest()
+    originals = dict(hashes)
+    for path, target in links.items():
+        if target in originals:
+            hashes[path] = originals[target]
+        else:
+            contents = {path + name[len(target):]: digest for name, digest in originals.items()
+                        if name.startswith(target + "/")}
+            if not contents:
+                raise ValueError(f"実体化できないsymlink: {path}")
+            hashes.update(contents)
     return hashes
 
 
