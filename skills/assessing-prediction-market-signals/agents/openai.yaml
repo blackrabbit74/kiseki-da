@@ -1,0 +1,4 @@
+interface:
+  display_name: "予測市場・市場情報の評価"
+  short_description: "予測市場・市場情報の評価について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$assessing-prediction-market-signals を使って、この予測市場の価格を情報源として使えるか、流動性・解決条件・別資料と比較してください。"

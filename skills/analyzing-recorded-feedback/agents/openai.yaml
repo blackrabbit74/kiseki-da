@@ -1,0 +1,4 @@
+interface:
+  display_name: "録画・音声のフィードバック整理"
+  short_description: "録画・音声のフィードバック整理について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$analyzing-recorded-feedback を使って、この操作録画から、時刻付きの不具合と改善要望を根拠付きで整理してください。"

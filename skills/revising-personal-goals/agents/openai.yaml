@@ -1,0 +1,4 @@
+interface:
+  display_name: "個人目標・自己理解"
+  short_description: "個人目標・自己理解について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$revising-personal-goals を使って、今の目標メモを整理し続ける行動と見直す前提を明確にしてください。"

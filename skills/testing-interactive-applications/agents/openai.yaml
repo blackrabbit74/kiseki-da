@@ -1,0 +1,4 @@
+interface:
+  display_name: "ブラウザ・アプリの動作検証"
+  short_description: "実際の利用手順でアプリを検証し、再現手順と画面証拠を残す"
+  default_prompt: "$testing-interactive-applications を使って、このアプリの登録から検索までをテストして不具合を報告してください。"

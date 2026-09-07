@@ -1,0 +1,4 @@
+interface:
+  display_name: "媒体別展開・投稿制作"
+  short_description: "元の文章や動画から媒体に合う投稿を作り、声と根拠を保って展開する"
+  default_prompt: "$adapting-content-for-channels を使って、この記事をLinkedIn投稿と短い動画台本に展開してください。"

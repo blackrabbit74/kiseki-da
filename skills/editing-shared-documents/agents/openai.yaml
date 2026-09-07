@@ -1,0 +1,4 @@
+interface:
+  display_name: "共同文書の共有・編集・レビュー"
+  short_description: "共有文書を現在の版に沿って編集し、コメントや変更結果を確認する"
+  default_prompt: "$editing-shared-documents を使って、この共有仕様書に修正提案を入れて変更内容を確認してください。"

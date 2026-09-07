@@ -1,0 +1,4 @@
+interface:
+  display_name: "画像・アイコン制作"
+  short_description: "用途と参照画像に合わせて画像素材を制作し、構図や透過を確認する"
+  default_prompt: "$creating-image-assets を使って、記事の見出しに使う透過イラストを制作してください。"

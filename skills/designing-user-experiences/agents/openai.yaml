@@ -1,0 +1,4 @@
+interface:
+  display_name: "ユーザー・プレイヤー体験設計"
+  short_description: "ユーザー・プレイヤー体験設計のために、目的に合う成果物と判断材料を整理して作成します"
+  default_prompt: "Use $designing-user-experiences to specify what the user or player does, understands, and experiences at each meaningful transition."

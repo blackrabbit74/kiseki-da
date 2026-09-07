@@ -1,0 +1,4 @@
+interface:
+  display_name: "ターミナル作業・セッションの準備"
+  short_description: "ターミナル作業・セッションの準備について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$opening-terminal-sessions を使って、指定のコマンドと引数を保ったまま、新しいターミナルで開発セッションを開いてください。"

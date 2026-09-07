@@ -1,0 +1,4 @@
+interface:
+  display_name: "通関・貿易書類の作成と審査"
+  short_description: "通関・貿易書類の作成と審査について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$reviewing-customs-documentation を使って、この輸出入書類を対象国と出荷日に照らして確認し、不整合と必要な根拠を整理してください。"

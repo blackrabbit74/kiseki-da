@@ -1,0 +1,4 @@
+interface:
+  display_name: "テスト設計・TDD・回帰防止"
+  short_description: "挙動を守るテストを設計し、狙った不具合で失敗することを確認する"
+  default_prompt: "$designing-regression-tests を使って、この不具合の再発を防ぐ回帰テストを追加してください。"

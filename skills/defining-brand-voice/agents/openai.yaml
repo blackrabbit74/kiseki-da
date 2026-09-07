@@ -1,0 +1,4 @@
+interface:
+  display_name: "ブランド・語り口の定義"
+  short_description: "ブランド・語り口の定義のために、目的に合う成果物と判断材料を整理して作成します"
+  default_prompt: "Use $defining-brand-voice to turn identity claims into choices another writer can apply consistently."

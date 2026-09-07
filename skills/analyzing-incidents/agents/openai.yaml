@@ -1,0 +1,4 @@
+interface:
+  display_name: "障害後の原因分析・再発防止"
+  short_description: "障害の時系列と寄与要因を整理し、再発防止策と検証方法を具体化する"
+  default_prompt: "$analyzing-incidents を使って、この障害の振り返りと再発防止策をまとめてください。"

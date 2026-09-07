@@ -1,0 +1,4 @@
+interface:
+  display_name: "単位作業の実装"
+  short_description: "定義済みの機能やチケットを実装し、受入条件と関連動作を確認する"
+  default_prompt: "$implementing-scoped-changes を使って、このチケットの検索フィルター機能を実装してください。"

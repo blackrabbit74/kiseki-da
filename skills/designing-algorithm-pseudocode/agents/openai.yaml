@@ -1,0 +1,4 @@
+interface:
+  display_name: "仕様から擬似コード・算法の設計"
+  short_description: "仕様から擬似コード・算法の設計について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$designing-algorithm-pseudocode を使って、この仕様を境界条件と計算量が確認できる擬似コードにしてください。"

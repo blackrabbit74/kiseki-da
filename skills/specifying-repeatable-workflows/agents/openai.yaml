@@ -1,0 +1,4 @@
+interface:
+  display_name: "汎用業務の手順化・自動化"
+  short_description: "汎用業務の手順化・自動化について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$specifying-repeatable-workflows を使って、この繰り返し業務を、起動条件・処理・例外・完了条件が分かる手順にしてください。"

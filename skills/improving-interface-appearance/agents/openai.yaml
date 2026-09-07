@@ -1,0 +1,4 @@
+interface:
+  display_name: "画面の評価・見た目の改善"
+  short_description: "実画面の階層や余白を評価し、既存デザインに沿って見た目を改善する"
+  default_prompt: "$improving-interface-appearance を使って、この画面の文字・余白・操作の分かりやすさを改善してください。"

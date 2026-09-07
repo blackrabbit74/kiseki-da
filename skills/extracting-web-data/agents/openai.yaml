@@ -1,0 +1,4 @@
+interface:
+  display_name: "Webからのデータ収集"
+  short_description: "Webページの表や一覧を抽出し、欠損・重複・取得範囲を検証する"
+  default_prompt: "$extracting-web-data を使って、この商品一覧を出典付きのCSVにしてください。"

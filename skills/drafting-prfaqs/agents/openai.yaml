@@ -1,0 +1,4 @@
+interface:
+  display_name: "PRFAQによる構想検証"
+  short_description: "PRFAQによる構想検証のために、目的に合う成果物と判断材料を整理して作成します"
+  default_prompt: "Use $drafting-prfaqs to make the future customer promise concrete enough to expose unsupported assumptions."

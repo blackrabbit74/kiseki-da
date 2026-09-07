@@ -1,0 +1,4 @@
+interface:
+  display_name: "費用の記録・分析"
+  short_description: "費用の記録・分析について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$reconciling-agent-costs を使って、利用ログの重複を除き、期間別・モデル別の費用を再現できる形で集計してください。"

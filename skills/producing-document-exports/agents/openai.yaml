@@ -1,0 +1,4 @@
+interface:
+  display_name: "文書・PDFの制作と変換"
+  short_description: "文書を指定形式に制作・変換し、ページ崩れや内容の欠落を確認する"
+  default_prompt: "$producing-document-exports を使って、このMarkdownを読みやすいPDFに変換してください。"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "出典付きリサーチ"
+  short_description: "出典付きリサーチのために、目的に合う成果物と判断材料を整理して作成します"
+  default_prompt: "Use $researching-with-sources to answer a question with evidence the reader can follow back to its origin."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "CI・開発自動化"
+  short_description: "CI・開発自動化について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$automating-development-checks を使って、既存の検査コマンドを使ってCIを整え、失敗が正しく検出されるか確認してください。"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "構造・因果・関係の図解"
+  short_description: "構造・因果・関係の図解のために、目的に合う成果物と判断材料を整理して作成します"
+  default_prompt: "Use $diagramming-structures to make important relationships inspectable without inventing connections."

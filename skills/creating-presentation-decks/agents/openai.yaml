@@ -1,0 +1,4 @@
+interface:
+  display_name: "スライド制作"
+  short_description: "伝わる構成と視認性を備えたスライドを作り、全ページの表示を確認する"
+  default_prompt: "$creating-presentation-decks を使って、この企画を10分の説明用スライドにしてください。"

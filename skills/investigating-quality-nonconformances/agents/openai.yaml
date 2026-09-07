@@ -1,0 +1,4 @@
+interface:
+  display_name: "品質不適合・是正処置"
+  short_description: "品質不適合・是正処置について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$investigating-quality-nonconformances を使って、この品質不適合の影響範囲と原因を調べ、封じ込め・是正・効果確認の計画を作成してください。"

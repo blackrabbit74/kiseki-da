@@ -1,0 +1,4 @@
+interface:
+  display_name: "コンサル提案・顧客向け説明"
+  short_description: "コンサル提案・顧客向け説明のために、目的に合う成果物と判断材料を整理して作成します"
+  default_prompt: "Use $drafting-client-proposals to give a client a concrete basis for judging whether an engagement addresses their problem."

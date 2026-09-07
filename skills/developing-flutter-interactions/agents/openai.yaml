@@ -1,0 +1,4 @@
+interface:
+  display_name: "Flutter・Dartの開発・検証"
+  short_description: "Flutter・Dartの開発・検証について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$developing-flutter-interactions を使って、このFlutter画面の非同期処理と画面遷移の不具合を直してください。"

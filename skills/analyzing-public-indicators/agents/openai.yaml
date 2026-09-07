@@ -1,0 +1,4 @@
+interface:
+  display_name: "経済・社会指標の集計・分析"
+  short_description: "公的な経済・社会指標を集め、単位や改定を揃えて推移を分析する"
+  default_prompt: "$analyzing-public-indicators を使って、米国の雇用と物価の推移を公的統計で比較してください。"

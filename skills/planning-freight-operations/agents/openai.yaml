@@ -1,0 +1,4 @@
+interface:
+  display_name: "物流の手配・例外対応"
+  short_description: "物流の手配・例外対応について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$planning-freight-operations を使って、この輸送案件の運送会社を総費用と納期リスクで比較し、代替案付きの手配案を作成してください。"

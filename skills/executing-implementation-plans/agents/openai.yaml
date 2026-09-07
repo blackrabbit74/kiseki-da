@@ -1,0 +1,4 @@
+interface:
+  display_name: "計画に沿う開発実行"
+  short_description: "既存の実装計画を順に実行し、差分と検証結果をタスクごとに残す"
+  default_prompt: "$executing-implementation-plans を使って、この実装計画を進め、完了した項目と検証結果をまとめてください。"

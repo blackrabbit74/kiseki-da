@@ -1,0 +1,4 @@
+interface:
+  display_name: "Djangoの開発・検証"
+  short_description: "Djangoの開発・検証について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$developing-django-workflows を使って、このDjangoのバックグラウンド処理を修正し再実行でも重複しないことを確かめてください。"

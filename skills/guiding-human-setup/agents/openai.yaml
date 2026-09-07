@@ -1,0 +1,4 @@
+interface:
+  display_name: "人が行う設定の対話案内"
+  short_description: "人が行う設定の対話案内について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$guiding-human-setup を使って、このサービス設定で私にしかできない操作を再開できる手順にしてください。"

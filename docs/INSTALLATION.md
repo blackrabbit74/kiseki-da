@@ -6,7 +6,7 @@
 - CodexのMacアプリ、またはClaude Code / Codexのlocal CLI
 - GitHubへ接続できること（clone、install、update時）
 
-`v0.1.0-beta.6`の対応対象はmacOS localです。Linux localはbeta利用中に検証を続けます。Windows 11 nativeとWSL2は検証待ちのため対応対象外です。将来検証用コードが含まれていても、動作保証を意味しません。
+`v0.1.0-beta.7`の対応対象はmacOS localです。Linux localはbeta利用中に検証を続けます。Windows 11 nativeとWSL2は検証待ちのため対応対象外です。将来検証用コードが含まれていても、動作保証を意味しません。
 
 ## Codexアプリだけを使っている場合
 
@@ -26,8 +26,8 @@ KISEKI_DA_CODEX_COMMAND='"/アプリの保存先/ChatGPT.app/Contents/Resources/
 `codex のCLIが見つかりません` と表示されたbeta.1からやり直す場合、同じcloneの中で次を実行します。公開タグを指定したcloneの `detached HEAD` 表示は、このインストール用途では問題ありません。手元に編集がある場合は退避してから切り替えてください。
 
 ```bash
-git fetch origin tag v0.1.0-beta.6
-git switch --detach v0.1.0-beta.6
+git fetch origin tag v0.1.0-beta.7
+git switch --detach v0.1.0-beta.7
 python3 install.py install --host codex --scope user
 ```
 
@@ -35,10 +35,10 @@ python3 install.py install --host codex --scope user
 
 ## 導入
 
-GitHub ReleasesからZIPと`SHA256SUMS`を別々に保存し、SHA-256を照合してから展開します。macOS/Linuxは`shasum -a 256 kiseki-da-0.1.0-beta.6.zip`の結果を`SHA256SUMS`と比較します。downloadしたscriptをshellへpipeして実行しません。cloneする場合は公開済みtagを指定します。
+GitHub ReleasesからZIPと`SHA256SUMS`を別々に保存し、SHA-256を照合してから展開します。macOS/Linuxは`shasum -a 256 kiseki-da-0.1.0-beta.7.zip`の結果を`SHA256SUMS`と比較します。downloadしたscriptをshellへpipeして実行しません。cloneする場合は公開済みtagを指定します。
 
 ```bash
-git clone --branch v0.1.0-beta.6 --depth 1 https://github.com/blackrabbit74/kiseki-da.git
+git clone --branch v0.1.0-beta.7 --depth 1 https://github.com/blackrabbit74/kiseki-da.git
 cd kiseki-da
 python3 install.py install --dry-run
 python3 install.py install

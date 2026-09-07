@@ -1,0 +1,4 @@
+interface:
+  display_name: "動画制作・編集"
+  short_description: "素材の見せ場から動画を編集し、字幕・音声同期・書き出しを確認する"
+  default_prompt: "$producing-edited-videos を使って、この録画から3分の製品デモ動画を作ってください。"

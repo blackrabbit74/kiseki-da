@@ -1,0 +1,4 @@
+interface:
+  display_name: "スキル選択・作業経路の案内"
+  short_description: "スキル選択・作業経路の案内について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$routing-task-workflows を使って、この依頼に適したスキルと次の作業経路を選び、必要な作業に進んでください。"

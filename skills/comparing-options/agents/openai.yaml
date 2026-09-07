@@ -1,0 +1,4 @@
+interface:
+  display_name: "選択肢比較・意思決定"
+  short_description: "選択肢比較・意思決定のために、目的に合う成果物と判断材料を整理して作成します"
+  default_prompt: "Use $comparing-options to help the user make a decision whose reasoning remains understandable when assumptions change."

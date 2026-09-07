@@ -1,0 +1,4 @@
+interface:
+  display_name: "SEO・広告・成長施策"
+  short_description: "SEO・広告・成長施策について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$improving-search-visibility を使って、このサイトの検索流入を妨げる技術的な問題を優先順に直してください。"

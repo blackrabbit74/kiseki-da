@@ -1,0 +1,4 @@
+interface:
+  display_name: "公開プロフィールの集約・公開準備"
+  short_description: "公開プロフィールの集約・公開準備について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$preparing-public-profiles を使って、この資料から公開プロフィール案を作り、古い情報と公開対象外の記述を整理してください。"

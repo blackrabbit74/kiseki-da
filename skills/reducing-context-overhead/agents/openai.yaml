@@ -1,0 +1,4 @@
+interface:
+  display_name: "文脈量の削減・圧縮"
+  short_description: "文脈量の削減・圧縮について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$reducing-context-overhead を使って、現在の文脈を棚卸しし、必要な決定と制約を残したまま読み込み量を減らしてください。"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "取引・決済コードの安全性"
+  short_description: "取引・決済コードの安全性について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$reviewing-transaction-execution を使って、このスワップ実装と自動実行の支出制限に資金損失の経路がないか調べてください。"

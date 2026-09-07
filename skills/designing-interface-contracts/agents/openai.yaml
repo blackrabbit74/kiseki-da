@@ -1,0 +1,4 @@
+interface:
+  display_name: "API・インターフェース設計"
+  short_description: "利用側と提供側の契約を定義し、型・エラー・互換性を揃えて検証する"
+  default_prompt: "$designing-interface-contracts を使って、このAPIの契約をフロントとバックエンドで共有できる形にしてください。"

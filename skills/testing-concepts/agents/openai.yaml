@@ -1,0 +1,4 @@
+interface:
+  display_name: "構想の試作・検証"
+  short_description: "構想の試作・検証のために、目的に合う成果物と判断材料を整理して作成します"
+  default_prompt: "Use $testing-concepts to answer one uncertain design question with an inspectable probe."

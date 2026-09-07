@@ -1,0 +1,4 @@
+interface:
+  display_name: "Reactの開発・検証"
+  short_description: "Reactの開発・検証について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$developing-react-interactions を使って、このReact画面の状態同期を直し連続操作と非同期応答を検証してください。"

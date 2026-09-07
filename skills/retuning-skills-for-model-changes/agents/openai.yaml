@@ -1,0 +1,4 @@
+interface:
+  display_name: "モデル変更時のスキル再調整"
+  short_description: "モデル変更時のスキル再調整について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$retuning-skills-for-model-changes を使って、モデル変更後に悪化したスキル群を、比較可能な実行結果に基づいて調整してください。"

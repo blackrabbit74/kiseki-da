@@ -1,0 +1,4 @@
+interface:
+  display_name: "学習支援・教材作成"
+  short_description: "学習目標に沿った短い教材と練習を作り、理解と定着を確かめる"
+  default_prompt: "$building-learning-materials を使って、SQLのJOINを実務で使えるように教材と練習問題を作ってください。"

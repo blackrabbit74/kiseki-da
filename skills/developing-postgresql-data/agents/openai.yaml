@@ -1,0 +1,4 @@
+interface:
+  display_name: "PostgreSQLの開発・検証"
+  short_description: "PostgreSQLの開発・検証について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$developing-postgresql-data を使って、このPostgreSQLのクエリとRLSを改善し実際のアプリ権限で検証してください。"

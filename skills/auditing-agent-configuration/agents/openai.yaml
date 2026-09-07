@@ -1,0 +1,4 @@
+interface:
+  display_name: "元ハーネスの診断・整理・修復"
+  short_description: "元ハーネスの診断・整理・修復について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$auditing-agent-configuration を使って、このエージェント設定の不要候補と壊れた参照を調べ、指定範囲を整理してください。"

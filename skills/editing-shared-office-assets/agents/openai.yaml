@@ -1,0 +1,4 @@
+interface:
+  display_name: "共有文書・シート・スライドの編集"
+  short_description: "共有文書・シート・スライドの編集について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$editing-shared-office-assets を使って、共有資料を特定して指定箇所を編集し、数式やレイアウトを保てたか確認してください。"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "作業環境の隔離・worktree"
+  short_description: "作業状態を保って隔離環境を準備し、開始リビジョンと実行環境を確認する"
+  default_prompt: "$preparing-isolated-workspaces を使って、現在の変更を保ちながら別の作業環境を用意してください。"

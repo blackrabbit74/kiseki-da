@@ -1,0 +1,4 @@
+interface:
+  display_name: "性能測定・最適化"
+  short_description: "同じ条件で性能を測り、ボトルネックを特定して改善効果を検証する"
+  default_prompt: "$measuring-and-optimizing-performance を使って、このAPIの遅延を測定してボトルネックを改善してください。"

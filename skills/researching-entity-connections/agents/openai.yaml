@@ -1,0 +1,4 @@
+interface:
+  display_name: "外部の人物・対象の調査"
+  short_description: "外部の人物・対象の調査について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$researching-entity-connections を使って、この公開企業と関連プロジェクトの関係を出典付きで整理してください。"

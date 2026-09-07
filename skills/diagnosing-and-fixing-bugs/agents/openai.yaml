@@ -1,0 +1,4 @@
+interface:
+  display_name: "不具合の再現・根因調査・修正"
+  short_description: "不具合を再現して境界ごとの証拠を調べ、原因に対応した修正を検証する"
+  default_prompt: "$diagnosing-and-fixing-bugs を使って、このエラーを再現して原因を調べ、修正してください。"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "文章のAI特徴・埋込文字の評価"
+  short_description: "文章のAI特徴・埋込文字の評価について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$examining-text-origin-signals を使って、この文章のAIらしい特徴と不可視文字を、断定せず根拠別に調べてください。"

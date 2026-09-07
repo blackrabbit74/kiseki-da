@@ -1,0 +1,4 @@
+interface:
+  display_name: "エネルギー調達の比較"
+  short_description: "エネルギー調達の比較について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$comparing-energy-procurement を使って、電力の使用実績と契約案を照合し、総費用・価格変動・需要料金を含めて比較してください。"

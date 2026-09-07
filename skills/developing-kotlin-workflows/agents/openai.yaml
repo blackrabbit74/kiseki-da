@@ -1,0 +1,4 @@
+interface:
+  display_name: "Kotlinの開発・検証"
+  short_description: "Kotlinの開発・検証について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$developing-kotlin-workflows を使って、このKotlinのFlow処理を修正しキャンセルと再購読を検証してください。"

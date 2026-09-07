@@ -1,0 +1,4 @@
+interface:
+  display_name: "Javaの開発・検証"
+  short_description: "Javaの開発・検証について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$developing-java-components を使って、このJavaコンポーネントを既存JDKに合わせて修正し等価性と例外処理も確認してください。"

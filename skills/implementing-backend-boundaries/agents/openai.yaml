@@ -1,0 +1,4 @@
+interface:
+  display_name: "バックエンドの実装規約"
+  short_description: "バックエンドの実装規約について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$implementing-backend-boundaries を使って、この新規エンドポイントを既存構成に合わせて実装し失敗時も検証してください。"

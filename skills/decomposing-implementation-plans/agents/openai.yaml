@@ -1,0 +1,4 @@
+interface:
+  display_name: "実装計画・タスク分解"
+  short_description: "仕様を依存関係と検証方法のある実装タスクへ分解して整理する"
+  default_prompt: "$decomposing-implementation-plans を使って、この仕様から既存コードに沿った実装計画を作ってください。"

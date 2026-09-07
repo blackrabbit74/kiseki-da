@@ -1,0 +1,4 @@
+interface:
+  display_name: "Perlの開発・検証"
+  short_description: "Perlの開発・検証について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$developing-perl-modules を使って、このPerlモジュールを修正し文字コードと呼出しコンテキストの境界をテストしてください。"

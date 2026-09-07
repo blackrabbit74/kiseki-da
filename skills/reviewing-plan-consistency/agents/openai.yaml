@@ -1,0 +1,4 @@
+interface:
+  display_name: "仕様・構想・計画の整合性レビュー"
+  short_description: "仕様・構想・計画の整合性レビューのために、目的に合う成果物と判断材料を整理して作成します"
+  default_prompt: "Use $reviewing-plan-consistency to find contradictions and missing coverage that would cause collaborators to build or decide different things."

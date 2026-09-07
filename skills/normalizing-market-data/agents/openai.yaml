@@ -1,0 +1,4 @@
+interface:
+  display_name: "市場データの取り込み・正規化"
+  short_description: "市場データの取り込み・正規化について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$normalizing-market-data を使って、市場データを取り込み、時刻・調整方法・欠損を確認して再現可能なOHLCVデータに整えてください。"

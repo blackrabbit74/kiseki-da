@@ -1,0 +1,4 @@
+interface:
+  display_name: "SNS・掲示板の情報収集"
+  short_description: "SNSや掲示板の発言を期間と出典付きで集め、意見の違いを整理する"
+  default_prompt: "$researching-social-discussions を使って、新製品について直近一週間のSNSの反応を調べてください。"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "リファクタリング・負債整理"
+  short_description: "挙動を保ったままコードを整理し、重複や読みにくさを減らす"
+  default_prompt: "$refactoring-for-maintainability を使って、このモジュールを挙動を変えずに読みやすく整理してください。"

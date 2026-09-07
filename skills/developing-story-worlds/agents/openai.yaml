@@ -1,0 +1,4 @@
+interface:
+  display_name: "JRPGの世界観・人物・物語"
+  short_description: "JRPGの世界観・人物・物語のために、目的に合う成果物と判断材料を整理して作成します"
+  default_prompt: "Use $developing-story-worlds to develop the creator’s intended story into a coherent, revisable world and narrative structure."

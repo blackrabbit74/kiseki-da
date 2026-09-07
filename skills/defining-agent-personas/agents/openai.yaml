@@ -1,0 +1,4 @@
+interface:
+  display_name: "エージェントのキャラクター定義"
+  short_description: "エージェントのキャラクター定義について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$defining-agent-personas を使って、業務目的に合うエージェントの人格を、口調・行動例・名前・外見案まで一貫して定義してください。"

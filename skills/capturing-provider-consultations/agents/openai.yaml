@@ -1,0 +1,4 @@
+interface:
+  display_name: "専用外部サービスの操作窓口"
+  short_description: "専用外部サービスの操作窓口について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$capturing-provider-consultations を使って、指定した外部モデルにこの問いを相談し回答と実行状態を再利用できる形で保存してください。"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "特定モデル・計算資源の操作窓口"
+  short_description: "特定モデル・計算資源の操作窓口について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$preparing-model-serving-handoffs を使って、この既存計算資源でモデルを配信できるか確認し実行用manifestを準備してください。"

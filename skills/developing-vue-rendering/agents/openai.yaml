@@ -1,0 +1,4 @@
+interface:
+  display_name: "Vueの開発・検証"
+  short_description: "Vueの開発・検証について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$developing-vue-rendering を使って、このVueまたはNuxt画面のhydrationとデータ再取得の不具合を直してください。"

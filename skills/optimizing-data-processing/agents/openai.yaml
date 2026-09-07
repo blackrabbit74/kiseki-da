@@ -1,0 +1,4 @@
+interface:
+  display_name: "データ変換・処理設計"
+  short_description: "データ変換・処理設計について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$optimizing-data-processing を使って、このETLを速くし、欠損・重複と残りの処理対象も検証してください。"

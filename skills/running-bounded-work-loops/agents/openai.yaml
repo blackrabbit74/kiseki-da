@@ -1,0 +1,4 @@
+interface:
+  display_name: "継続実行・反復ループ"
+  short_description: "受入条件に向けて作業を反復し、進捗・復旧・停止条件を管理する"
+  default_prompt: "$running-bounded-work-loops を使って、この検証項目が通るまで、進捗を残しながら修正を続けてください。"

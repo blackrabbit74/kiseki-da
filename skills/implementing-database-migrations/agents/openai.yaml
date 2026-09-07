@@ -1,0 +1,4 @@
+interface:
+  display_name: "データベース移行"
+  short_description: "DB変更を段階化し、ロック・データ整合性・再開と復旧を確認する"
+  default_prompt: "$implementing-database-migrations を使って、このカラム変更を停止時間を抑えて移行できるようにしてください。"

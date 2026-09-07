@@ -1,0 +1,4 @@
+interface:
+  display_name: "リリースノート・出荷差分の整理"
+  short_description: "リリースノート・出荷差分の整理について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$drafting-release-changes を使って、前回版からの変更を調べ、移行手順付きのリリースノートを作成してください。"

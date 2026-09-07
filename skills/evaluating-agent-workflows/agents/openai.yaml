@@ -1,0 +1,4 @@
+interface:
+  display_name: "エージェント・ハーネスの評価"
+  short_description: "エージェント・ハーネスの評価について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$evaluating-agent-workflows を使って、このエージェントの作業成功率を測る評価ケースを作り、実行結果と限界を報告してください。"

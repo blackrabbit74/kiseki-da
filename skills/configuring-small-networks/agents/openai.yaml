@@ -1,0 +1,4 @@
+interface:
+  display_name: "家庭・小規模ネットワークの構築"
+  short_description: "家庭・小規模ネットワークの構築について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$configuring-small-networks を使って、家庭内ネットワークのDNS・区画・VPNを、管理接続と復旧手順を保ちながら構成してください。"

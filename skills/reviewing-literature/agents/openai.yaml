@@ -1,0 +1,4 @@
+interface:
+  display_name: "論文・文献レビュー"
+  short_description: "論文・文献レビューのために、目的に合う成果物と判断材料を整理して作成します"
+  default_prompt: "Use $reviewing-literature to explain what a body of literature supports, where it conflicts, and where evidence is missing."

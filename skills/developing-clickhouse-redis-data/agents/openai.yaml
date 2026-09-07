@@ -1,0 +1,4 @@
+interface:
+  display_name: "ClickHouse・Redisの開発・検証"
+  short_description: "ClickHouse・Redisの開発・検証について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$developing-clickhouse-redis-data を使って、このClickHouseまたはRedisの実装を見直し重複処理と障害復旧を検証してください。"

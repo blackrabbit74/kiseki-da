@@ -1,0 +1,4 @@
+interface:
+  display_name: "開発規約・案件ルールの整備"
+  short_description: "既存規約と実測値をもとに開発ルールを整え、確認方法と適用範囲を定める"
+  default_prompt: "$establishing-project-standards を使って、この案件の開発規約と品質基準を整理してください。"

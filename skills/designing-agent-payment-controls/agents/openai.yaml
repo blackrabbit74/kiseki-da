@@ -1,0 +1,4 @@
+interface:
+  display_name: "エージェント決済・金額処理"
+  short_description: "エージェント決済・金額処理について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$designing-agent-payment-controls を使って、エージェント決済の金額・予算・宛先・再試行を設計し、二重決済を防ぐ検証を用意してください。"

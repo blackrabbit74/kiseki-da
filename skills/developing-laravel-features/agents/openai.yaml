@@ -1,0 +1,4 @@
+interface:
+  display_name: "Laravelの開発・検証"
+  short_description: "Laravelの開発・検証について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$developing-laravel-features を使って、このLaravel機能を実装し権限不足とDB失敗のケースも確認してください。"

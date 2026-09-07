@@ -1,0 +1,4 @@
+interface:
+  display_name: "開発環境・ツールの準備"
+  short_description: "開発環境・ツールの準備について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$preparing-project-environments を使って、このプロジェクトを再現可能な環境で起動できるよう、必要な依存と設定を整えてください。"

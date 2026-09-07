@@ -1,0 +1,4 @@
+interface:
+  display_name: "市場・競合調査"
+  short_description: "市場・競合調査のために、目的に合う成果物と判断材料を整理して作成します"
+  default_prompt: "Use $researching-markets to make market evidence useful for a specific entry, positioning, or investment decision."

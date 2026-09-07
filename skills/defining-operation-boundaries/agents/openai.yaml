@@ -1,0 +1,4 @@
+interface:
+  display_name: "操作権限・安全境界"
+  short_description: "自動作業の操作範囲と権限を整理し、実際の制御と確認箇所を明確にする"
+  default_prompt: "$defining-operation-boundaries を使って、この自動処理の書込範囲と危険な操作の境界を整理してください。"

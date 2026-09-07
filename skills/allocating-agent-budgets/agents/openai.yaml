@@ -1,0 +1,4 @@
+interface:
+  display_name: "予算制御・モデル配分"
+  short_description: "予算制御・モデル配分について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$allocating-agent-budgets を使って、残り予算と作業量を照合し、品質条件を保てるモデル配分と実行範囲を決めてください。"

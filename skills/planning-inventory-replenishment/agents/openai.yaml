@@ -1,0 +1,4 @@
+interface:
+  display_name: "在庫・生産計画"
+  short_description: "在庫・生産計画について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$planning-inventory-replenishment を使って、需要と発注残・納期をもとに、欠品と過剰在庫の両方を抑える補充計画を作成してください。"

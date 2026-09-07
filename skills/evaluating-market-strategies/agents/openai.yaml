@@ -1,0 +1,4 @@
+interface:
+  display_name: "金融市場・取引・暗号資産"
+  short_description: "金融市場・取引・暗号資産について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$evaluating-market-strategies を使って、この市場データの仮説を明示し、コストと先読みを考慮した検証結果をまとめてください。"

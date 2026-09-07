@@ -1,0 +1,4 @@
+interface:
+  display_name: "Git変更・commit・PR管理"
+  short_description: "Git差分と履歴を確認し、必要な変更だけをcommitやPRとして整理する"
+  default_prompt: "$managing-git-changes を使って、この変更だけを分かりやすいcommitとPR説明に整理してください。"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "IoT機器の管理・来歴検証"
+  short_description: "IoT機器の管理・来歴検証について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$verifying-device-provenance を使って、IoT機器の来歴を検証し、epochの欠落とhash不整合を根拠付きで報告してください。"

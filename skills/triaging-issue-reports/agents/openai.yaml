@@ -1,0 +1,4 @@
+interface:
+  display_name: "issueの整理・トリアージ"
+  short_description: "issueの整理・トリアージについて、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$triaging-issue-reports を使って、このissueを検証して、分類・不足情報・実装に渡せる作業概要をまとめてください。"

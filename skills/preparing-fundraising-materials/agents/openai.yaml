@@ -1,0 +1,4 @@
+interface:
+  display_name: "資金調達・投資家向け資料"
+  short_description: "資金調達・投資家向け資料について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$preparing-fundraising-materials を使って、実績と予測を区別し、資金使途とマイルストーンが整合する投資家向け資料を作ってください。"

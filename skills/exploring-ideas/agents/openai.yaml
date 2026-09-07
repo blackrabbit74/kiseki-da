@@ -1,0 +1,4 @@
+interface:
+  display_name: "アイデアの発想・探索"
+  short_description: "アイデアの発想・探索のために、目的に合う成果物と判断材料を整理して作成します"
+  default_prompt: "Use $exploring-ideas to explore this idea."

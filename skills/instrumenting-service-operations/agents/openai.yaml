@@ -1,0 +1,4 @@
+interface:
+  display_name: "本番監視・運用診断"
+  short_description: "本番監視・運用診断について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$instrumenting-service-operations を使って、このサービスの障害原因を追えるよう、ログとメトリクスの設計・実装を整えてください。"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "検索・ベクトル・知識基盤実装"
+  short_description: "検索・ベクトル・知識基盤実装について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$implementing-retrieval-knowledge-bases を使って、資料を根拠付きで検索できる知識基盤を実装し、検索品質と更新・削除の挙動を確認してください。"

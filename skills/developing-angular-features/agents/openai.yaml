@@ -1,0 +1,4 @@
+interface:
+  display_name: "Angularの開発・検証"
+  short_description: "Angularの開発・検証について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$developing-angular-features を使って、このAngularフォームを既存バージョンに合わせて実装し入力エラーも検証してください。"

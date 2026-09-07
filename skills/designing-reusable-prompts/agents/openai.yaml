@@ -1,0 +1,4 @@
+interface:
+  display_name: "プロンプト設計・改善"
+  short_description: "プロンプト設計・改善について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$designing-reusable-prompts を使って、この用途のプロンプトを、変数と期待する出力が明確な再利用可能テンプレートにしてください。"

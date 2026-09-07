@@ -1,0 +1,4 @@
+interface:
+  display_name: "言語横断のエラー処理"
+  short_description: "言語横断のエラー処理について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$designing-error-contracts を使って、このAPIの再試行とエラー応答を二重実行が起きないように整理してください。"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "C#・.NETの開発・検証"
+  short_description: "C#・.NETの開発・検証について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$developing-dotnet-behaviors を使って、この.NETサービスを修正し非同期の失敗と依存関係の寿命も確認してください。"

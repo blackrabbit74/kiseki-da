@@ -1,0 +1,4 @@
+interface:
+  display_name: "医療アプリと臨床業務の設計"
+  short_description: "医療アプリと臨床業務の設計について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$designing-clinical-software-workflows を使って、診療業務の状態と失敗時の対応を整理し、患者識別と安全性を検証できる医療アプリ設計にしてください。"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "記憶の保存・同期・管理"
+  short_description: "記憶の保存・同期・管理について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$maintaining-durable-memory を使って、この案件の重要な決定を既存の記憶と照合し、重複を避けて保存してください。"

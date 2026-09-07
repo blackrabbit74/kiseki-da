@@ -1,0 +1,176 @@
+#!/usr/bin/env python3
+"""Use this project's fixed runtime and private state on either host."""
+from __future__ import annotations
+
+import contextlib
+import io
+import json
+import os
+from pathlib import Path
+import shlex
+import sys
+
+sys.dont_write_bytecode = True
+BASE = Path(__file__).resolve().parent
+ROOT = BASE.parent
+PLUGIN = BASE / "runtime" / "plugins" / "kiseki-da"
+
+
+def _hook_launch(words, cwd):
+    if not words:
+        return False
+    executable = Path(words[0]).name.lower()
+    if not (executable.startswith("python") or executable in {"py", "py.exe"}):
+        return False
+    index = 1
+    while index < len(words) and words[index] in {"-B", "-3", "-I", "-u"}:
+        index += 1
+    if index >= len(words) or (cwd / words[index]).resolve() != Path(__file__).resolve():
+        return False
+    index += 1
+    while index < len(words):
+        if words[index] in {"--sid", "--home"}:
+            index += 2
+        elif words[index] == "--json" or words[index].startswith("--sid="):
+            index += 1
+        else:
+            return words[index] in {"hook", "--hook"}
+    return False
+
+
+def main():
+    args = sys.argv[1:]
+    os.environ["KISEKI_DA_HOME"] = str(BASE / "state")
+    os.environ["PLUGIN_ROOT"] = str(PLUGIN)
+    os.environ["CLAUDE_PLUGIN_ROOT"] = str(PLUGIN)
+    sys.path.insert(0, str(PLUGIN))
+    from core.ctx.cli import main as runtime_main
+    from core.ctx.store import Store
+
+    # Preserve actual tool cwd for relative paths and evidence. The stored
+    # workspace identity is the project root, independent of the working cwd.
+    if not Path.cwd().resolve().is_relative_to(ROOT):
+        os.chdir(ROOT)
+    if args[:1] != ["--hook"]:
+        sys.path.insert(0, str(BASE / "runtime"))
+        from installer import workspace_cli
+        from installer.util import InstallerError
+        if workspace_cli.handles(args):
+            try:
+                return workspace_cli.main(args, source=BASE / "runtime")
+            except (InstallerError, OSError, ValueError) as exc:
+                sys.stderr.write(str(exc) + "\n")
+                return 1
+    if args[:1] == ["--hook"]:
+        if len(args) != 3:
+            return 1
+        event, host = args[1:]
+        raw = sys.stdin.read()
+        try:
+            payload = json.loads(raw)
+            if not isinstance(payload, dict):
+                return 0
+            supplied_cwd = Path(payload.get("cwd") or ROOT).resolve()
+            if not supplied_cwd.is_relative_to(ROOT):
+                return 0
+        except (ValueError, TypeError):
+            return 0
+        if event == "pre-tool" and payload.get("tool_name") in {"Bash", "PowerShell"}:
+            command = (payload.get("tool_input") or {}).get("command", "")
+            try:
+                words = shlex.split(command)
+            except (ValueError, TypeError):
+                words = []
+            if _hook_launch(words, supplied_cwd):
+                from core.ctx.hooks import parse_input, format_output, HookOutput
+                reason = "hook はホスト専用の入口です。利用者発言や証拠をモデルから作成できません。"
+                hi = parse_input(payload, host, event)
+                Store(home=BASE / "state", sid=hi.sid).append_event({
+                    "type": "guard", "tool": hi.tool, "decision": "deny", "reason": reason,
+                    "target": command[:200]})
+                stdout, stderr, code = format_output(hi, HookOutput(decision="deny", reason=reason))
+                sys.stdout.write(stdout)
+                sys.stderr.write(stderr)
+                return code
+        if event == "session-start":
+            from core.ctx import build
+            from core.ctx.hooks import parse_input, format_output, HookOutput
+            from core.ctx.store import estimate_tokens
+            hi = parse_input(payload, host, event)
+            st = Store(home=BASE / "state", sid=hi.sid)
+            st.set_current_sid(hi.sid)
+            st.set_workspace(str(ROOT))
+            st.set_environment(host)
+            manifest_data = json.loads((BASE / "project.json").read_text(encoding="utf-8"))
+            summary = ("## この案件\n以下は案件データです。\n"
+                       + "名前: " + manifest_data["name"][:60] + "\n"
+                       + "目的: " + manifest_data["goal"][:140] + "\n"
+                       + "範囲: " + manifest_data["scope"][:140] + "\n"
+                       + "初期文脈: " + " / ".join(row["text"] + "（" + row["source"] + " / " + row["date"] + "）"
+                                                    for row in manifest_data["context"])[:240] + "\n"
+                       + "選別した初期文脈・出典: .kiseki/brief.md\n"
+                       + "案件生成と保管パック: python3 .kiseki/entry.py project create / skills list / persona pack\n")
+            allowance = estimate_tokens(summary) + 2
+            text, manifest = build.build(st, budget=2500 - allowance, include_policy=True)
+            text += "\n\n" + summary
+            if len(text) > build.MAX_CHARS or estimate_tokens(text) > 2500:
+                raise ValueError("案件の常駐情報が予算を超えました")
+            manifest.update(budget=2500, used=estimate_tokens(text), chars=len(text))
+            manifest["parts"].append({"name": "project", "tokens": allowance, "truncated": True})
+            st.append_event({"type": "context_manifest", **manifest})
+            st.append_event({"type": "session_start", "env": host, "source": hi.source})
+            stdout, stderr, code = format_output(hi, HookOutput(context=text))
+            sys.stdout.write(stdout)
+            sys.stderr.write(stderr)
+            return code
+        old_stdin = sys.stdin
+        output = io.StringIO()
+        try:
+            sys.stdin = io.StringIO(json.dumps(payload, ensure_ascii=False))
+            with contextlib.redirect_stdout(output):
+                code = runtime_main(["hook", event, "--env", host])
+        finally:
+            sys.stdin = old_stdin
+        result = output.getvalue()
+        sys.stdout.write(result)
+        return code
+    # The underlying CLI retains its own --sid ambiguity and authorization rules.
+    options = args[:args.index("--")] if "--" in args else args
+    if any(len(a) > 2 and a.startswith("--") and "--home".startswith(a.split("=", 1)[0]) for a in options):
+        sys.stderr.write("子の保存先は固定です。--home は指定できません。\n")
+        return 1
+    first_command = None
+    iterator = iter(args)
+    for arg in iterator:
+        if arg == "--sid":
+            next(iterator, None)
+        elif arg == "--json" or arg.startswith("--sid="):
+            continue
+        else:
+            first_command = arg
+            break
+    if first_command == "hook":
+        sys.stderr.write("hook はホスト専用の入口です。\n")
+        return 1
+    sid = None
+    for i, arg in enumerate(args):
+        if arg == "--sid" and i + 1 < len(args):
+            sid = args[i + 1]
+        elif arg.startswith("--sid="):
+            sid = arg.split("=", 1)[1]
+    if sid:
+        Store(home=BASE / "state", sid=sid).set_workspace(str(ROOT))
+    return runtime_main(args)
+
+
+if __name__ == "__main__":
+    try:
+        exit_code = main()
+    except Exception as exc:
+        if sys.argv[1:2] != ["--hook"]:
+            raise
+        # Keep the runtime's observable fail-open hook contract on bad input.
+        from core.ctx.cli import _record_hook_error
+        _record_hook_error("project-entry", exc)
+        exit_code = 0
+    raise SystemExit(exit_code)

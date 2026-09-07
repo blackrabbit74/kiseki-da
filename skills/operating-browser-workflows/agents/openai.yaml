@@ -1,0 +1,4 @@
+interface:
+  display_name: "ブラウザ操作・フォーム入力"
+  short_description: "画面の現在状態を確認しながらフォーム入力とブラウザ操作を進める"
+  default_prompt: "$operating-browser-workflows を使って、申込フォームに提供情報を入力して内容を確認してください。"

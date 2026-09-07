@@ -1,0 +1,4 @@
+interface:
+  display_name: "配布物の導入・利用確認"
+  short_description: "配布物の導入・利用確認について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$verifying-release-installations を使って、公開済みバイナリを指定の導入経路で試し、版と動作と後片付けを確認してください。"

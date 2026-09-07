@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pythonの開発・検証"
+  short_description: "Pythonの開発・検証について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$developing-python-modules を使って、このPythonモジュールを修正し呼出し間の状態漏れと例外処理を確認してください。"

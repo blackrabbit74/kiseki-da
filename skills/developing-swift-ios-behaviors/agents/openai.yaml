@@ -1,0 +1,4 @@
+interface:
+  display_name: "Swift・iOSの開発・検証"
+  short_description: "Swift・iOSの開発・検証について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$developing-swift-ios-behaviors を使って、このSwiftアプリの保存処理を直し失敗時と再起動後の状態を確認してください。"

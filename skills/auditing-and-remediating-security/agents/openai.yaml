@@ -1,0 +1,4 @@
+interface:
+  display_name: "セキュリティ監査・修正"
+  short_description: "対象範囲の脆弱性を根拠付きで調べ、修正と攻撃条件への対策を検証する"
+  default_prompt: "$auditing-and-remediating-security を使って、この認証処理をセキュリティレビューして必要な修正をしてください。"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "リリース・配布・デプロイ"
+  short_description: "配布物と公開手順を整え、段階公開の状態と復旧方法を確認する"
+  default_prompt: "$releasing-software を使って、このリリースの準備と段階公開の確認を進めてください。"

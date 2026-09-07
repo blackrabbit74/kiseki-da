@@ -1,0 +1,4 @@
+interface:
+  display_name: "文書・変更作業の完了整理"
+  short_description: "文書・変更作業の完了整理について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$closing-completed-work を使って、この作業の成果物と検証結果を照合し、未完了事項を残して完了記録をまとめてください。"

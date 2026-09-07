@@ -1,0 +1,4 @@
+interface:
+  display_name: "学術成果の評価"
+  short_description: "論文や研究計画を根拠付きで評価し、妥当性と修正優先度を整理する"
+  default_prompt: "$evaluating-scholarly-work を使って、この論文の方法と結論が整合しているか評価してください。"

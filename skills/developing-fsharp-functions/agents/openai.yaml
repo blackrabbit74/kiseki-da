@@ -1,0 +1,4 @@
+interface:
+  display_name: "F#の開発・検証"
+  short_description: "F#の開発・検証について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$developing-fsharp-functions を使って、このF#関数を型で整理し境界値と性質ベースのテストで検証してください。"

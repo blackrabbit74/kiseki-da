@@ -1,0 +1,4 @@
+interface:
+  display_name: "売上・請求・顧客契約運用"
+  short_description: "売上・請求・顧客契約運用について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$resolving-customer-billing-cases を使って、この顧客の請求状態を調べ、重複・契約・返金対象を確認した対応案をまとめてください。"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "アーキテクチャ設計"
+  short_description: "責務とインターフェースを設計し、複雑さの配置と変更しやすさを検討する"
+  default_prompt: "$designing-software-architecture を使って、この新機能のモジュール構成と境界を設計してください。"

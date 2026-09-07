@@ -1,0 +1,4 @@
+interface:
+  display_name: "Blenderのリグ・モーション診断"
+  short_description: "Blenderのリグ・モーション診断について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$diagnosing-blender-motion を使って、このBlenderキャラクターの足滑りと腕のねじれをフレーム情報から診断してください。"

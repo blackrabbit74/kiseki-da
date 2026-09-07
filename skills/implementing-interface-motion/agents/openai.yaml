@@ -1,0 +1,4 @@
+interface:
+  display_name: "モーション・アニメーション実装"
+  short_description: "状態が伝わるUIアニメーションを実装し、軽減設定と中断動作を確認する"
+  default_prompt: "$implementing-interface-motion を使って、このモーダルに自然な開閉アニメーションを実装してください。"

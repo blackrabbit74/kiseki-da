@@ -1,0 +1,4 @@
+interface:
+  display_name: "コードレビュー"
+  short_description: "差分を仕様と既存規約に照らして確認し、実害のある指摘を根拠付きで示す"
+  default_prompt: "$reviewing-code-changes を使って、このPRの差分をレビューして不具合と仕様漏れを指摘してください。"

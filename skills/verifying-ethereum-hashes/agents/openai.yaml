@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ethereumのハッシュ・識別子処理"
+  short_description: "Ethereumのハッシュ・識別子処理について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$verifying-ethereum-hashes を使って、このEthereum識別子のハッシュ計算を確認しKeccakと入力エンコードの不具合を直してください。"

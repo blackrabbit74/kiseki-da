@@ -1,0 +1,4 @@
+interface:
+  display_name: "merge・rebase競合の解消"
+  short_description: "両方の変更意図を読んでGit競合を解消し、統合後の動作を確認する"
+  default_prompt: "$resolving-git-conflicts を使って、このrebase競合を両方の意図を保って解消してください。"

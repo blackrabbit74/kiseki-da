@@ -1,0 +1,4 @@
+interface:
+  display_name: "用語・設定・判断記録"
+  short_description: "用語・設定・判断記録のために、目的に合う成果物と判断材料を整理して作成します"
+  default_prompt: "Use $defining-domain-terms to give collaborators stable meanings and a traceable reason for important choices."

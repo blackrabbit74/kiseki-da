@@ -1,0 +1,4 @@
+interface:
+  display_name: "Rustの開発・検証"
+  short_description: "Rustの開発・検証について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$developing-rust-crates を使って、このRustクレートを修正し所有権と境界値、対象featureを検証してください。"

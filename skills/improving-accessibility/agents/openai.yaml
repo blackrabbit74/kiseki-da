@@ -1,0 +1,4 @@
+interface:
+  display_name: "アクセシビリティ"
+  short_description: "操作や読み上げの障壁を調べ、キーボード・フォーカス・表示を改善する"
+  default_prompt: "$improving-accessibility を使って、このフォームをキーボードと読み上げで使いやすくしてください。"

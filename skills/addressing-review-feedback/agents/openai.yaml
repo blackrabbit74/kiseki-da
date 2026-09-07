@@ -1,0 +1,4 @@
+interface:
+  display_name: "レビュー指摘への対応"
+  short_description: "レビュー指摘を現状コードで検証し、妥当な修正と未解決項目を整理する"
+  default_prompt: "$addressing-review-feedback を使って、このレビュー指摘を検証して必要な修正を入れてください。"

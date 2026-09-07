@@ -1,0 +1,4 @@
+interface:
+  display_name: "API・MCPコネクターの実装"
+  short_description: "既存の接続方式に合わせてAPI連携を実装し、登録と失敗時動作を確認する"
+  default_prompt: "$building-service-connectors を使って、既存の連携方式に合わせて新しいサービスのコネクターを追加してください。"

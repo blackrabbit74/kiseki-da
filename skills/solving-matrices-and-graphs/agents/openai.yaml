@@ -1,0 +1,4 @@
+interface:
+  display_name: "数値計算・グラフ解析"
+  short_description: "数値計算・グラフ解析について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$solving-matrices-and-graphs を使って、この疎行列またはグラフを解析し解の誤差と計算条件を確認してください。"

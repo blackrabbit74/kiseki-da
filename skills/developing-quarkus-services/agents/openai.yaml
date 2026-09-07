@@ -1,0 +1,4 @@
+interface:
+  display_name: "Quarkusの開発・検証"
+  short_description: "Quarkusの開発・検証について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$developing-quarkus-services を使って、このQuarkusサービスを修正しイベント失敗と起動時の依存注入を検証してください。"

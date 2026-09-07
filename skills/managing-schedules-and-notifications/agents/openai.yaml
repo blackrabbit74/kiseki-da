@@ -1,0 +1,4 @@
+interface:
+  display_name: "予定・定期実行・通知"
+  short_description: "予定・定期実行・通知について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$managing-schedules-and-notifications を使って、指定した予定と通知条件で定期実行を設定し、既存ジョブとの重複も確認してください。"

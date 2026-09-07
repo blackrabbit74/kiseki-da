@@ -1,0 +1,4 @@
+interface:
+  display_name: "クラウド・コンテナ・実行基盤"
+  short_description: "クラウド・コンテナ・実行基盤について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$building-container-environments を使って、このCompose構成を再起動後のデータ保持も含めて動作確認してください。"

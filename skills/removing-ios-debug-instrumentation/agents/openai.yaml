@@ -1,0 +1,4 @@
+interface:
+  display_name: "元ハーネスの専用案内・補助操作"
+  short_description: "元ハーネスの専用案内・補助操作について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$removing-ios-debug-instrumentation を使って、このiOSアプリから指定のデバッグブリッジだけを除去しReleaseを確認してください。"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "元ハーネスの導入・設定・更新"
+  short_description: "元ハーネスの導入・設定・更新について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$configuring-repository-workflows を使って、このリポジトリの既存ツールに合わせて課題管理とドキュメント参照の設定を整えてください。"

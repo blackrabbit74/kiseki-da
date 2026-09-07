@@ -1,0 +1,4 @@
+interface:
+  display_name: "必要な文脈・知識の検索"
+  short_description: "必要な文脈・知識の検索のために、目的に合う成果物と判断材料を整理して作成します"
+  default_prompt: "Use $retrieving-context to supply the relevant evidence and history without flooding the task with unrelated material."

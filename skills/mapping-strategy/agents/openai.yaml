@@ -1,0 +1,4 @@
+interface:
+  display_name: "戦略・ロードマップ"
+  short_description: "戦略・ロードマップのために、目的に合う成果物と判断材料を整理して作成します"
+  default_prompt: "Use $mapping-strategy to connect a destination to a feasible sequence of outcomes and decisions."

@@ -244,6 +244,11 @@ def _runtime_source(source: Path, destination: Path) -> None:
             copytree_filtered(candidate, destination / metadata_dir)
     shutil.copy2(source / "install.py", destination / "install.py")
     shutil.copy2(source / "VERSION", destination / "VERSION")
+    # The complete corpus is stored outside host skill-discovery directories.
+    # Older release fixtures without a corpus retain their original behavior.
+    if (source / "skills").is_dir() or (source / "packs" / "skills").is_dir():
+        from .packs import copy_pack
+        copy_pack(source, destination / "packs")
 
 
 def _sh_quote(value: str) -> str:

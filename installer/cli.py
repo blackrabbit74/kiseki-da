@@ -307,6 +307,13 @@ def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv:
         argv = ["install"]
+    from . import workspace_cli
+    try:
+        if workspace_cli.handles(argv):
+            return workspace_cli.main(argv)
+    except (InstallerError, OSError, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
     if argv and argv[0] in RUNTIME_COMMANDS and argv[0] not in {"setup", "persona", "project"}:
         try:
             return runtime_dispatch(argv)

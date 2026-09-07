@@ -1,0 +1,4 @@
+interface:
+  display_name: "既存コードの理解・構造把握"
+  short_description: "入口からデータの流れを追い、既存コードの構造と変更箇所を説明する"
+  default_prompt: "$mapping-codebases を使って、注文処理がこのリポジトリのどこを通るか説明してください。"

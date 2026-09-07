@@ -1,0 +1,4 @@
+interface:
+  display_name: "TypeScript・Nodeの開発・検証"
+  short_description: "TypeScript・Nodeの開発・検証について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$developing-typescript-packages を使って、このTypeScriptパッケージのexportを直し実際の利用側から検証してください。"

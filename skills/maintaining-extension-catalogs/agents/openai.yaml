@@ -1,0 +1,4 @@
+interface:
+  display_name: "元ハーネスへの寄稿・専用保守"
+  short_description: "元ハーネスへの寄稿・専用保守について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$maintaining-extension-catalogs を使って、この拡張機能の申請を確認し既存カタログと説明文を更新してください。"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "依存関係・移行・互換性"
+  short_description: "利用側の互換性を確認しながら旧仕組みから新仕組みへの移行を進める"
+  default_prompt: "$planning-compatible-migrations を使って、旧APIから新APIへの移行手順と互換性の確認方法を作ってください。"

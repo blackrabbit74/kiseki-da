@@ -1,0 +1,4 @@
+interface:
+  display_name: "Spring Bootの開発・検証"
+  short_description: "Spring Bootの開発・検証について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$developing-spring-boot-services を使って、このSpring Boot APIを修正し認可とトランザクション境界を確認してください。"

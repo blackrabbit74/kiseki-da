@@ -1,0 +1,4 @@
+interface:
+  display_name: "分散協調・群制御の基盤実装"
+  short_description: "分散協調・群制御の基盤実装について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$designing-distributed-coordination を使って、このワーカー群の再割当てで二重処理が起きない協調方式を設計してください。"

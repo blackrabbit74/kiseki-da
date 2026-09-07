@@ -1,0 +1,4 @@
+interface:
+  display_name: "稼働環境の負荷・健全性診断"
+  short_description: "稼働環境の負荷・健全性診断について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$diagnosing-host-resource-pressure を使って、この端末が遅くなる原因を、CPU・メモリ・温度などの観測から絞り込んでください。"

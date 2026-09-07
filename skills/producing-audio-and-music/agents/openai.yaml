@@ -1,0 +1,4 @@
+interface:
+  display_name: "音声・音楽制作"
+  short_description: "録音の自然さを保って音声を編集し、指定した構成で音楽素材を制作する"
+  default_prompt: "$producing-audio-and-music を使って、この音声の不要な間を整え、短いオープニング曲も制作してください。"

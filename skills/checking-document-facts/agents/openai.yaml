@@ -1,0 +1,4 @@
+interface:
+  display_name: "文書の事実確認"
+  short_description: "文書の事実確認のために、目的に合う成果物と判断材料を整理して作成します"
+  default_prompt: "Use $checking-document-facts to determine which claims in a defined document are supported by reality."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "知識文書・案件文脈の整備"
+  short_description: "知識文書・案件文脈の整備について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$maintaining-project-knowledge を使って、案件の文書と実装のずれを調べ、正本と参照関係が分かる形に整えてください。"

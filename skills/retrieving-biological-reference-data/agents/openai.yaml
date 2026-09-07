@@ -1,0 +1,4 @@
+interface:
+  display_name: "生物学データの検索"
+  short_description: "生物学データの検索について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$retrieving-biological-reference-data を使って、対象生物とassemblyを確認して遺伝子情報を検索し、ID・出典・取得条件付きで結果を保存してください。"

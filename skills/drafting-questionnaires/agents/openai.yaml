@@ -1,0 +1,4 @@
+interface:
+  display_name: "顧客・関係者への質問票"
+  short_description: "顧客・関係者への質問票のために、目的に合う成果物と判断材料を整理して作成します"
+  default_prompt: "Use $drafting-questionnaires to obtain the specific knowledge gap a recipient can resolve."

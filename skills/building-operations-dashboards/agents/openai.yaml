@@ -1,0 +1,4 @@
+interface:
+  display_name: "運用ダッシュボードの制作"
+  short_description: "運用ダッシュボードの制作について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$building-operations-dashboards を使って、運用担当が健康状態とボトルネックを判断できるダッシュボードを作成してください。"

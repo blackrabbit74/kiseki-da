@@ -1,0 +1,4 @@
+interface:
+  display_name: "コード品質・技術負債の統合診断"
+  short_description: "コード品質・技術負債の統合診断について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$assessing-codebase-health を使って、このコードベースの品質状態を既存ツールで調べ、技術負債を優先付けしてください。"

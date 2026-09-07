@@ -1,0 +1,4 @@
+interface:
+  display_name: "地域ニュース・行政情報の集約"
+  short_description: "地域ニュース・行政情報の集約について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$compiling-local-civic-briefs を使って、この市の今週の議会予定と新しい行政発表を出典付きでまとめてください。"

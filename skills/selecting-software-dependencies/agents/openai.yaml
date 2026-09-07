@@ -1,0 +1,4 @@
+interface:
+  display_name: "依存パッケージ・既存解決策の選定"
+  short_description: "既存の解決策と依存パッケージを比較し、適合性と保守負担で選定する"
+  default_prompt: "$selecting-software-dependencies を使って、この機能を既存ライブラリで実現するか自作するか比較してください。"

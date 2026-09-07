@@ -1,0 +1,4 @@
+interface:
+  display_name: "特許・商標の公式記録調査"
+  short_description: "特許・商標の公式記録を照合し、識別子・状態・検索条件を残す"
+  default_prompt: "$researching-ip-records を使って、この企業の米国特許と商標の公式記録を調べてください。"

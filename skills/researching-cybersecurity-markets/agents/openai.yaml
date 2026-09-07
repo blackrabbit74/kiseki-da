@@ -1,0 +1,4 @@
+interface:
+  display_name: "サイバーセキュリティ市場の調査"
+  short_description: "サイバー企業の資金調達と買収を調べ、実績と予測を分けて示す"
+  default_prompt: "$researching-cybersecurity-markets を使って、クラウドセキュリティ分野の資金調達と買収動向を整理してください。"

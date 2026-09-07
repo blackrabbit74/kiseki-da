@@ -1,0 +1,4 @@
+interface:
+  display_name: "インストーラー・CLIの制作"
+  short_description: "CLIとインストーラーを制作し、配布先での起動・更新・終了動作を確認する"
+  default_prompt: "$building-cli-distributions を使って、このアプリを配布できるCLIとインストーラーに整えてください。"

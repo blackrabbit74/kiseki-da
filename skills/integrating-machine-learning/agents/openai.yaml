@@ -1,0 +1,4 @@
+interface:
+  display_name: "機械学習モデルの導入・開発"
+  short_description: "機械学習モデルの導入・開発について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$integrating-machine-learning を使って、既存アプリに機械学習を導入し、単純な基準との比較と失敗時の代替動作まで確認してください。"

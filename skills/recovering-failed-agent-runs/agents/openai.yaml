@@ -1,0 +1,4 @@
+interface:
+  display_name: "エージェント実行の診断・回復"
+  short_description: "エージェント実行の診断・回復について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$recovering-failed-agent-runs を使って、同じ失敗を繰り返すエージェント実行を診断し、確認済み地点から復旧してください。"

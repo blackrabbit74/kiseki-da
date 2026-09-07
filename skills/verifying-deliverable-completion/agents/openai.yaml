@@ -1,0 +1,4 @@
+interface:
+  display_name: "完了条件・成果物の検証"
+  short_description: "成果物を受入条件と証拠で照合し、確認済みと未確認の範囲を明確にする"
+  default_prompt: "$verifying-deliverable-completion を使って、この成果物が完了条件を満たすか確認してください。"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "実装用の仕様・設計書作成"
+  short_description: "要件から実装可能な仕様を作り、状態・境界・受入例を具体化する"
+  default_prompt: "$writing-implementation-specs を使って、この決済機能の要件を実装者向けの仕様にまとめてください。"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "振り返り・学びの再利用"
+  short_description: "振り返り・学びの再利用について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$capturing-reusable-lessons を使って、今回の作業を振り返り、再利用できる学びを適用条件と根拠付きで整理してください。"

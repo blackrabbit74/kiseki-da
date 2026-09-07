@@ -1,0 +1,4 @@
+interface:
+  display_name: "複数エージェントの分担・並列実行"
+  short_description: "独立した作業をエージェントへ分担し、所有範囲と統合結果を管理する"
+  default_prompt: "$coordinating-parallel-agents を使って、この独立した3機能をエージェントで分担して実装してください。"

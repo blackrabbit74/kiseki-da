@@ -1,0 +1,4 @@
+interface:
+  display_name: "MySQLの開発・検証"
+  short_description: "MySQLの開発・検証について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$developing-mysql-queries を使って、このMySQLクエリを改善し実行計画とロックへの影響を確認してください。"

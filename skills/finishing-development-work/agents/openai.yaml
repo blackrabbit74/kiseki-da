@@ -1,0 +1,4 @@
+interface:
+  display_name: "開発ブランチの終了・統合方針"
+  short_description: "完了した開発の統合先と状態を確認し、選択済みの引渡し方法を実行する"
+  default_prompt: "$finishing-development-work を使って、このブランチの作業を確認してPRとして引き渡してください。"

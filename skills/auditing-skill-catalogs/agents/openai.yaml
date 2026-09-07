@@ -1,0 +1,4 @@
+interface:
+  display_name: "スキル棚卸し・発見・評価"
+  short_description: "スキル棚卸し・発見・評価について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$auditing-skill-catalogs を使って、このスキル群を棚卸しし、重複・古い指示・選択条件の問題を根拠付きで整理してください。"

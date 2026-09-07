@@ -1,0 +1,4 @@
+interface:
+  display_name: "元ハーネスの内部基盤開発"
+  short_description: "元ハーネスの内部基盤開発について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$evaluating-adaptive-runtime-learning を使って、このエージェント基盤の適応学習部分を調べ、改善効果と退行を小さく検証してください。"

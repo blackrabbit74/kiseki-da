@@ -1,0 +1,4 @@
+interface:
+  display_name: "前提・因果・システム分析"
+  short_description: "前提・因果・システム分析のために、目的に合う成果物と判断材料を整理して作成します"
+  default_prompt: "Use $analyzing-assumptions to identify which assumptions or causal links are actually carrying a proposed explanation."

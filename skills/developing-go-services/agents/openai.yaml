@@ -1,0 +1,4 @@
+interface:
+  display_name: "Goの開発・検証"
+  short_description: "Goの開発・検証について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$developing-go-services を使って、このGoサービスのキャンセル漏れとエラー処理を修正してください。"

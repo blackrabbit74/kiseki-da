@@ -1,0 +1,4 @@
+interface:
+  display_name: "ネットワーク構成の検証・運用"
+  short_description: "ネットワーク構成の検証・運用について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$validating-network-changes を使って、このルーター変更案でBGP経路と管理接続への影響を確認してください。"

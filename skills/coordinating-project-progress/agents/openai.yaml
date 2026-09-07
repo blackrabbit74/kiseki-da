@@ -1,0 +1,4 @@
+interface:
+  display_name: "タスク・プロジェクト進捗管理"
+  short_description: "タスク・プロジェクト進捗管理について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$coordinating-project-progress を使って、複数の管理先に分かれた作業を照合し、担当・状態・次の行動を整理してください。"

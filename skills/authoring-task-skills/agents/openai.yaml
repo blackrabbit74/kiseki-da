@@ -1,0 +1,4 @@
+interface:
+  display_name: "スキル・プロンプトの作成改善"
+  short_description: "スキル・プロンプトの作成改善について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$authoring-task-skills を使って、この繰り返し作業を、呼び出し条件と完了基準が明確なスキルにしてください。"

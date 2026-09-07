@@ -1,0 +1,4 @@
+interface:
+  display_name: "スキル利用・指示遵守の評価"
+  short_description: "スキル利用・指示遵守の評価について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$measuring-instruction-adherence を使って、このスキルが実際に選ばれ、必要な指示が守られるかをシナリオと操作記録で評価してください。"

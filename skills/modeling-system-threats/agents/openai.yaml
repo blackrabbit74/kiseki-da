@@ -1,0 +1,4 @@
+interface:
+  display_name: "脅威分析・攻撃視点の検討"
+  short_description: "資産と信頼関係から侵害シナリオを検討し、影響範囲と対策を整理する"
+  default_prompt: "$modeling-system-threats を使って、このシステムが侵害された場合の影響範囲と対策を整理してください。"

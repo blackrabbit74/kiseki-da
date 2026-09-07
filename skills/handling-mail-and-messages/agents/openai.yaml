@@ -1,0 +1,4 @@
+interface:
+  display_name: "メール・メッセージ業務"
+  short_description: "メール・メッセージ業務について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$handling-mail-and-messages を使って、このメールのやり取りを確認し、未回答事項を押さえた返信案を作成してください。"

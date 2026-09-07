@@ -1,0 +1,4 @@
+interface:
+  display_name: "React Nativeの開発・検証"
+  short_description: "React Nativeの開発・検証について、実際の条件に沿って作業と検証を進める"
+  default_prompt: "$developing-react-native-screens を使って、このReact Native画面を修正し深いリンクと権限拒否時の挙動を確認してください。"

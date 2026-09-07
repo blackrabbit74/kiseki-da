@@ -1,0 +1,4 @@
+interface:
+  display_name: "医療情報の保護・規制対応"
+  short_description: "医療情報の保護・規制対応について、根拠と実行条件を確認して成果物にまとめる"
+  default_prompt: "$protecting-healthcare-information を使って、医療情報の流れと権限を調べ、漏えい経路と規制要件に対する対策を根拠付きで整理してください。"
