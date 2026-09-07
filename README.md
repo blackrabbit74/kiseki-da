@@ -42,6 +42,15 @@ Codexアプリを再起動し、作業フォルダを`Local`で開きます。`/
 
 ### 既存環境の更新
 
+**beta.6以前からは、初回だけ新版のインストーラーで更新してください。** 旧版の更新処理には保管パックのコピーがないためです。次のコマンドは既存の利用者設定を引き継ぎます。
+
+```bash
+git clone --branch v0.1.0-beta.7 --depth 1 https://github.com/blackrabbit74/kiseki-da.git kiseki-da-beta7
+python3 kiseki-da-beta7/install.py update
+```
+
+beta.7以降を導入済みなら、通常のCLIで更新できます。
+
 ```bash
 kiseki-da update --dry-run
 kiseki-da update

@@ -86,6 +86,15 @@ Codexを再起動して`/hooks`を開き、Kiseki DAのhookを確認してtrust�
 
 ## 更新と削除
 
+beta.6以前からbeta.7へ移る初回は、新版のインストーラーを実行します。旧版の更新処理は180スキルの保管パックをコピーしないため、旧CLIだけで更新するとパックが欠落します。既にその状態になった場合も、次の手順で再適用できます。
+
+```bash
+git clone --branch v0.1.0-beta.7 --depth 1 https://github.com/blackrabbit74/kiseki-da.git kiseki-da-beta7
+python3 kiseki-da-beta7/install.py update
+```
+
+新版の`update`も、導入済みhost・scope・利用者設定を引き継ぎます。beta.7以降を導入済みなら、次の通常手順を使用します。
+
 自動更新はありません。`kiseki-da update --dry-run`で変更を確認し、`kiseki-da update`で明示更新します。`kiseki-da uninstall`はKiseki DAが所有するplugin登録とruntimeだけを外し、個人状態は保持します。
 
 beta.5以降の更新は、実行中のセッションが参照する旧hook cacheを削除しません。Codexのnative `plugin add`は旧cacheを整理するため、一時環境で新版cacheを作り、実環境へ追加配置してから参照tagを更新します。Claudeは旧cacheを保持するmarketplace再登録とplugin installを使用します。更新やrollbackの途中で新しく開始したセッションも保護するため、追加配置したcacheはrollbackでも残します。同じversionの内容が異なる場合は上書きせず停止します。
