@@ -4,7 +4,7 @@
 
 Kiseki DA（Digital Assistant）は、Claude Code / Codexに、案件ごとの文脈、承認制の記憶、証拠付きタスク管理、キャラクター設定を加える個人AIハーネスです。日常の相談から、必要なスキルと初期文脈を持つ作業環境の作成・再開までを支えます。Python 3.11〜3.14の標準ライブラリで動き、外部telemetryはありません。
 
-> **v0.1.0-beta.7** — 固定版基盤付きのプロジェクト生成、3つのサブDAプリセット、180スキルの保管パックを追加。対応対象はmacOS localです。
+> **v0.1.0-beta.8** — プロジェクト生成・3つのサブDA・180スキルを備え、通信失敗後の更新復旧を修正した版です。対応対象はmacOS localです。
 
 ## できること
 
@@ -25,7 +25,7 @@ Kiseki DA（Digital Assistant）は、Claude Code / Codexに、案件ごとの�
 macOS、Python 3.11〜3.14、CodexアプリまたはClaude Code / Codex CLIが必要です。Codexアプリの同梱CLIも自動検出します。利用するフォルダはGitリポジトリでなくても構いません。
 
 ```bash
-git clone --branch v0.1.0-beta.7 --depth 1 https://github.com/blackrabbit74/kiseki-da.git
+git clone --branch v0.1.0-beta.8 --depth 1 https://github.com/blackrabbit74/kiseki-da.git
 python3 kiseki-da/install.py install --host codex --scope user
 ```
 
@@ -45,8 +45,8 @@ Codexアプリを再起動し、作業フォルダを`Local`で開きます。`/
 **beta.6以前からは、初回だけ新版のインストーラーで更新してください。** 旧版の更新処理には保管パックのコピーがないためです。次のコマンドは既存の利用者設定を引き継ぎます。
 
 ```bash
-git clone --branch v0.1.0-beta.7 --depth 1 https://github.com/blackrabbit74/kiseki-da.git kiseki-da-beta7
-python3 kiseki-da-beta7/install.py update
+git clone --branch v0.1.0-beta.8 --depth 1 https://github.com/blackrabbit74/kiseki-da.git kiseki-da-beta8
+python3 kiseki-da-beta8/install.py update
 ```
 
 beta.7以降を導入済みなら、通常のCLIで更新できます。
@@ -108,7 +108,7 @@ python3 .kiseki/entry.py search 検索語 --sid 現在のsession-id
 
 ## 常用18スキルと保管180スキル
 
-180スキルは、相談・調査・文章作成・設計・開発・検証・運用などの手順をまとめたパックです。常用18個はその部分集合で、相談、意思決定、文脈整理、計画、検証を中心に選んでいます。全180個は`KISEKI_DA_HOME/runtime/0.1.0-beta.7/packs/skills/`に保管し、通常のホスト探索先には一括配置しません。
+180スキルは、相談・調査・文章作成・設計・開発・検証・運用などの手順をまとめたパックです。常用18個はその部分集合で、相談、意思決定、文脈整理、計画、検証を中心に選んでいます。全180個は`KISEKI_DA_HOME/runtime/0.1.0-beta.8/packs/skills/`に保管し、通常のホスト探索先には一括配置しません。
 
 ```bash
 kiseki-da skills list research

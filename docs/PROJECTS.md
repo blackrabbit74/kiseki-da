@@ -75,7 +75,7 @@ python3 .kiseki/entry.py skills list 調査語
 
 新しいメイン用フォルダには`project create`で`--role main`を指定し、`skills`を省略すると合意済み18個を選びます。DAは既存形式のpersona JSONでも指定できます。既存メインの状態は自動でコピーしません。
 
-保管パックは、子では`.kiseki/runtime/packs/skills/`、共通インストールでは`KISEKI_DA_HOME/runtime/0.1.0-beta.7/packs/skills/`にあり、通常のホスト探索先には置きません。必要な時にだけ検索・取得できます。
+保管パックは、子では`.kiseki/runtime/packs/skills/`、共通インストールでは`KISEKI_DA_HOME/runtime/0.1.0-beta.8/packs/skills/`にあり、通常のホスト探索先には置きません。必要な時にだけ検索・取得できます。
 
 ```bash
 python3 install.py skills list research

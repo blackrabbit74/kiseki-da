@@ -395,6 +395,17 @@ def _manual_state_path(home: Path, target: Path) -> bool:
     }
 
 
+def _original_signature(entry: dict) -> dict | None:
+    kind = entry.get("kind")
+    if kind == "absent":
+        return {"kind": "absent", "sha256": None}
+    if kind in {"file", "directory"}:
+        return Transaction._signature(Path(entry["backup"]))
+    if kind == "symlink":
+        return {"kind": "symlink", "sha256": hashlib.sha256(str(entry["value"]).encode()).hexdigest()}
+    return None
+
+
 def _restore(
     data: dict, runner: Runner, *, manual_committed: bool = False,
     persist: Callable[[], None] | None = None,
@@ -415,7 +426,11 @@ def _restore(
                 if not file_entry.get("external_mutable") or not isinstance(file_entry.get("applied"), dict):
                     continue
                 target = Path(file_entry["target"])
-                if Transaction._signature(target) != file_entry["applied"]:
+                # A prior rollback may have restored the file while a native
+                # undo failed. Compare against that known original state.
+                expected = (_original_signature(file_entry) if file_entry.get("restored") is True
+                            else file_entry["applied"])
+                if Transaction._signature(target) != expected:
                     errors.append(f"filesystem {target}: host設定の同時変更を検出したためnative undoを停止しました")
                     external_conflict = True
                     break
@@ -431,9 +446,14 @@ def _restore(
                 entry["undo_state"] = "failed"
             else:
                 entry["undo_state"] = "applied"
-                for file_entry in data.get("filesystem", []):
-                    if file_entry.get("external_mutable"):
-                        file_entry["applied"] = Transaction._signature(Path(file_entry["target"]))
+            # Native commands may alter settings even when returning failure.
+            # Record their result and restore previously restored files again.
+            for file_entry in data.get("filesystem", []):
+                if file_entry.get("external_mutable"):
+                    file_entry["applied"] = Transaction._signature(Path(file_entry["target"]))
+                    if file_entry.get("restored") is True:
+                        file_entry["restored"] = False
+                        file_entry.pop("restore_state", None)
             if persist:
                 persist()
         except Exception as exc:  # noqa: BLE001 - rollback must continue
@@ -447,15 +467,7 @@ def _restore(
             continue
         applied = entry.get("applied")
         if entry.get("restore_state") == "running":
-            kind = entry.get("kind")
-            if kind == "absent":
-                original = {"kind": "absent", "sha256": None}
-            elif kind in {"file", "directory"}:
-                original = Transaction._signature(Path(entry["backup"]))
-            elif kind == "symlink":
-                original = {"kind": "symlink", "sha256": hashlib.sha256(str(entry["value"]).encode()).hexdigest()}
-            else:
-                original = None
+            original = _original_signature(entry)
             if isinstance(original, dict) and Transaction._signature(target) == original:
                 entry["restored"] = True
                 entry["restore_state"] = "restored"

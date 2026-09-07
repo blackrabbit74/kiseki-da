@@ -6,7 +6,7 @@
 - CodexのMacアプリ、またはClaude Code / Codexのlocal CLI
 - GitHubへ接続できること（clone、install、update時）
 
-`v0.1.0-beta.7`の対応対象はmacOS localです。Linux localはbeta利用中に検証を続けます。Windows 11 nativeとWSL2は検証待ちのため対応対象外です。将来検証用コードが含まれていても、動作保証を意味しません。
+`v0.1.0-beta.8`の対応対象はmacOS localです。Linux localはbeta利用中に検証を続けます。Windows 11 nativeとWSL2は検証待ちのため対応対象外です。将来検証用コードが含まれていても、動作保証を意味しません。
 
 ## Codexアプリだけを使っている場合
 
@@ -26,8 +26,8 @@ KISEKI_DA_CODEX_COMMAND='"/アプリの保存先/ChatGPT.app/Contents/Resources/
 `codex のCLIが見つかりません` と表示されたbeta.1からやり直す場合、同じcloneの中で次を実行します。公開タグを指定したcloneの `detached HEAD` 表示は、このインストール用途では問題ありません。手元に編集がある場合は退避してから切り替えてください。
 
 ```bash
-git fetch origin tag v0.1.0-beta.7
-git switch --detach v0.1.0-beta.7
+git fetch origin tag v0.1.0-beta.8
+git switch --detach v0.1.0-beta.8
 python3 install.py install --host codex --scope user
 ```
 
@@ -35,10 +35,10 @@ python3 install.py install --host codex --scope user
 
 ## 導入
 
-GitHub ReleasesからZIPと`SHA256SUMS`を別々に保存し、SHA-256を照合してから展開します。macOS/Linuxは`shasum -a 256 kiseki-da-0.1.0-beta.7.zip`の結果を`SHA256SUMS`と比較します。downloadしたscriptをshellへpipeして実行しません。cloneする場合は公開済みtagを指定します。
+GitHub ReleasesからZIPと`SHA256SUMS`を別々に保存し、SHA-256を照合してから展開します。macOS/Linuxは`shasum -a 256 kiseki-da-0.1.0-beta.8.zip`の結果を`SHA256SUMS`と比較します。downloadしたscriptをshellへpipeして実行しません。cloneする場合は公開済みtagを指定します。
 
 ```bash
-git clone --branch v0.1.0-beta.7 --depth 1 https://github.com/blackrabbit74/kiseki-da.git
+git clone --branch v0.1.0-beta.8 --depth 1 https://github.com/blackrabbit74/kiseki-da.git
 cd kiseki-da
 python3 install.py install --dry-run
 python3 install.py install
@@ -86,14 +86,16 @@ Codexを再起動して`/hooks`を開き、Kiseki DAのhookを確認してtrust�
 
 ## 更新と削除
 
-beta.6以前からbeta.7へ移る初回は、新版のインストーラーを実行します。旧版の更新処理は180スキルの保管パックをコピーしないため、旧CLIだけで更新するとパックが欠落します。既にその状態になった場合も、次の手順で再適用できます。
+beta.6以前からbeta.7以降へ移る初回は、新版のインストーラーを実行します。旧版の更新処理は180スキルの保管パックをコピーしないため、旧CLIだけで更新するとパックが欠落します。既にその状態になった場合も、次の手順で再適用できます。
 
 ```bash
-git clone --branch v0.1.0-beta.7 --depth 1 https://github.com/blackrabbit74/kiseki-da.git kiseki-da-beta7
-python3 kiseki-da-beta7/install.py update
+git clone --branch v0.1.0-beta.8 --depth 1 https://github.com/blackrabbit74/kiseki-da.git kiseki-da-beta8
+python3 kiseki-da-beta8/install.py update
 ```
 
 新版の`update`も、導入済みhost・scope・利用者設定を引き継ぎます。beta.7以降を導入済みなら、次の通常手順を使用します。
+
+beta.7以前の更新が通信エラーで`rollback_incomplete`になった場合は、beta.8のソースから`python3 install.py rollback --transaction 表示されたtransaction-id`を実行してから更新します。beta.8は、自己復旧済みの設定を同時編集と誤判定する問題を修正しています。実際に変更された設定は引き続き保持して停止します。
 
 自動更新はありません。`kiseki-da update --dry-run`で変更を確認し、`kiseki-da update`で明示更新します。`kiseki-da uninstall`はKiseki DAが所有するplugin登録とruntimeだけを外し、個人状態は保持します。
 
