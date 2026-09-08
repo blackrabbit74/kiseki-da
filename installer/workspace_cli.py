@@ -11,8 +11,9 @@ from .util import InstallerError
 
 def handles(argv):
     argv = _without_sid(argv)
-    return bool(argv) and (argv[0] == "skills" or
-        argv[:2] in (["project", "create"], ["project", "show"], ["project", "recover"], ["persona", "pack"]))
+    return bool(argv) and (argv[0] in {"skills", "access"} or
+        argv[:2] in (["project", "create"], ["project", "show"], ["project", "recover"],
+                    ["project", "refresh-guidance"], ["persona", "pack"]))
 
 
 def _without_sid(argv):
@@ -43,6 +44,8 @@ def main(argv, source=SOURCE_ROOT):
     from . import packs, projects
     parser = Parser(prog="kiseki-da")
     commands = parser.add_subparsers(dest="command", required=True)
+    access = commands.add_parser("access", help="この実行環境から保存先へ書き込めるか診断する")
+    access.add_argument("--json", action="store_true")
     project = commands.add_parser("project").add_subparsers(dest="action", required=True)
     create = project.add_parser("create", help="固定版基盤付きの作業環境を作成する")
     create.add_argument("destination")
@@ -58,6 +61,9 @@ def main(argv, source=SOURCE_ROOT):
     create.add_argument("--dry-run", action="store_true")
     for action in ("show", "recover"):
         project.add_parser(action).add_argument("destination")
+    refresh = project.add_parser("refresh-guidance", help="既存案件の文脈・CLI案内の更新をプレビューする")
+    refresh.add_argument("destination")
+    refresh.add_argument("--apply", action="store_true")
     skill = commands.add_parser("skills").add_subparsers(dest="action", required=True)
     listing = skill.add_parser("list")
     listing.add_argument("query", nargs="?", default="")
@@ -77,6 +83,12 @@ def main(argv, source=SOURCE_ROOT):
     # The session argument is accepted for consistency; this extension does not
     # manufacture runtime events or replace the host's evidence recorder.
     args = parser.parse_args(_without_sid(argv))
+    if args.command == "access":
+        from .runtime_access import check_access
+        from .util import kiseki_home
+        result = check_access(kiseki_home())
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result["status"] == "writable" else 2
     if args.command == "project":
         if args.action == "create":
             values = _json_file(args.answers) if args.answers else {}
@@ -95,6 +107,9 @@ def main(argv, source=SOURCE_ROOT):
             result = projects.create_project(Path(source), Path(args.destination), dry_run=args.dry_run, **values)
         elif args.action == "show":
             result = projects.show_project(Path(args.destination))
+        elif args.action == "refresh-guidance":
+            from .project_guidance import refresh_guidance
+            result = refresh_guidance(Path(source), Path(args.destination), apply=args.apply)
         else:
             result = projects.recover_project(Path(args.destination))
     elif args.command == "persona":

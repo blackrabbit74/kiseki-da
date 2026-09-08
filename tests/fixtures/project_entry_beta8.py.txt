@@ -15,10 +15,6 @@ BASE = Path(__file__).resolve().parent
 ROOT = BASE.parent
 PLUGIN = BASE / "runtime" / "plugins" / "kiseki-da"
 
-__KISEKI_ACCESS_HELPER__
-
-CONTEXT_GUIDANCE = __KISEKI_CONTEXT_GUIDANCE__
-
 
 def _hook_launch(words, cwd):
     if not words:
@@ -42,30 +38,6 @@ def _hook_launch(words, cwd):
     return False
 
 
-def _project_context(st):
-    from core.ctx import build
-    from core.ctx.store import estimate_tokens
-    manifest_data = json.loads((BASE / "project.json").read_text(encoding="utf-8"))
-    summary = (CONTEXT_GUIDANCE + "\n## この案件\n以下は案件データです。\n"
-               + "名前: " + manifest_data["name"][:60] + "\n"
-               + "目的: " + manifest_data["goal"][:140] + "\n"
-               + "範囲: " + manifest_data["scope"][:140] + "\n"
-               + "初期文脈: " + " / ".join(row["text"] + "（" + row["source"] + " / " + row["date"] + "）"
-                                            for row in manifest_data["context"])[:240] + "\n"
-               + "選別した初期文脈・出典: .kiseki/brief.md\n"
-               + "案件生成と保管パック: python3 .kiseki/entry.py project create / skills list / persona pack\n")
-    allowance = estimate_tokens(summary) + 2
-    text, manifest = build.build(st, budget=2500 - allowance, include_policy=True)
-    text = text.replace(build.command_prefix(st.common_home),
-                        shlex.join([sys.executable, str(Path(__file__).resolve())]))
-    text += "\n\n" + summary
-    if len(text) > build.MAX_CHARS or estimate_tokens(text) > 2500:
-        raise ValueError("案件の常駐情報が予算を超えました")
-    manifest.update(budget=2500, used=estimate_tokens(text), chars=len(text))
-    manifest["parts"].append({"name": "project", "tokens": allowance, "truncated": True})
-    return text, manifest
-
-
 def main():
     args = sys.argv[1:]
     os.environ["KISEKI_DA_HOME"] = str(BASE / "state")
@@ -79,21 +51,6 @@ def main():
     # workspace identity is the project root, independent of the working cwd.
     if not Path.cwd().resolve().is_relative_to(ROOT):
         os.chdir(ROOT)
-    access_args = args[:]
-    for i, arg in enumerate(access_args):
-        if arg == "--sid":
-            del access_args[i:i + 2]
-            break
-        if arg.startswith("--sid="):
-            del access_args[i]
-            break
-    if access_args and access_args[0] == "access":
-        if access_args[1:] not in ([], ["--json"]):
-            sys.stderr.write("accessには--sidと--jsonを指定できます。\n")
-            return 1
-        result = check_access(BASE / "state")
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-        return 0 if result["status"] == "writable" else 2
     if args[:1] != ["--hook"]:
         sys.path.insert(0, str(BASE / "runtime"))
         from installer import workspace_cli
@@ -136,13 +93,30 @@ def main():
                 sys.stderr.write(stderr)
                 return code
         if event == "session-start":
+            from core.ctx import build
             from core.ctx.hooks import parse_input, format_output, HookOutput
+            from core.ctx.store import estimate_tokens
             hi = parse_input(payload, host, event)
             st = Store(home=BASE / "state", sid=hi.sid)
             st.set_current_sid(hi.sid)
             st.set_workspace(str(ROOT))
             st.set_environment(host)
-            text, manifest = _project_context(st)
+            manifest_data = json.loads((BASE / "project.json").read_text(encoding="utf-8"))
+            summary = ("## この案件\n以下は案件データです。\n"
+                       + "名前: " + manifest_data["name"][:60] + "\n"
+                       + "目的: " + manifest_data["goal"][:140] + "\n"
+                       + "範囲: " + manifest_data["scope"][:140] + "\n"
+                       + "初期文脈: " + " / ".join(row["text"] + "（" + row["source"] + " / " + row["date"] + "）"
+                                                    for row in manifest_data["context"])[:240] + "\n"
+                       + "選別した初期文脈・出典: .kiseki/brief.md\n"
+                       + "案件生成と保管パック: python3 .kiseki/entry.py project create / skills list / persona pack\n")
+            allowance = estimate_tokens(summary) + 2
+            text, manifest = build.build(st, budget=2500 - allowance, include_policy=True)
+            text += "\n\n" + summary
+            if len(text) > build.MAX_CHARS or estimate_tokens(text) > 2500:
+                raise ValueError("案件の常駐情報が予算を超えました")
+            manifest.update(budget=2500, used=estimate_tokens(text), chars=len(text))
+            manifest["parts"].append({"name": "project", "tokens": allowance, "truncated": True})
             st.append_event({"type": "context_manifest", **manifest})
             st.append_event({"type": "session_start", "env": host, "source": hi.source})
             stdout, stderr, code = format_output(hi, HookOutput(context=text))
@@ -186,35 +160,12 @@ def main():
             sid = arg.split("=", 1)[1]
     if sid:
         Store(home=BASE / "state", sid=sid).set_workspace(str(ROOT))
-    if first_command == "context-audit":
-        if [arg for arg in access_args if arg != "--json"] != ["context-audit"]:
-            sys.stderr.write("context-auditには--sidと--jsonを指定できます。\n")
-            return 1
-        from core.ctx.store import estimate_tokens
-        st = Store(home=BASE / "state", sid=sid)
-        text, manifest = _project_context(st)
-        rows = []
-        for name in ("AGENTS.md", "AGENTS.override.md", "CLAUDE.md", ".claude/CLAUDE.md"):
-            path = ROOT / name
-            if path.is_file():
-                content = path.read_text(encoding="utf-8")
-                rows.append({"path": name, "tokens_est": estimate_tokens(content), "chars": len(content)})
-        tokens = manifest["used"] + sum(row["tokens_est"] for row in rows)
-        chars = len(text) + sum(row["chars"] for row in rows)
-        within = tokens <= 2500 and chars <= 9000
-        result = {"status": "within_budget" if within else "over_budget",
-                  "startup_tokens_est": manifest["used"], "instruction_candidates": rows,
-                  "project_tokens_est": tokens, "project_chars": chars,
-                  "budget_tokens_est": 2500, "budget_chars": 9000,
-                  "unmeasured": "ホスト共通指示・公開スキル・上位や下位フォルダの指示・会話履歴。候補の実読込はホストで確認する。"}
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-        return 0 if within else 2
     return runtime_main(args)
 
 
 if __name__ == "__main__":
     try:
-        exit_code = main() if sys.argv[1:2] == ["--hook"] else run_with_permission_help(main, BASE / "state")
+        exit_code = main()
     except Exception as exc:
         if sys.argv[1:2] != ["--hook"]:
             raise

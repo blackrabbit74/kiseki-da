@@ -1415,7 +1415,8 @@ def runtime_dispatch(argv: list[str]) -> int:
     os.environ["KISEKI_DA_HOME"] = str(home)
     from core.ctx.cli import main as runtime_main
     if not _runtime_config_mutation(argv):
-        return int(runtime_main(argv))
+        from .runtime_access import run_with_permission_help
+        return int(run_with_permission_help(lambda: runtime_main(argv), home))
 
     from core.ctx.scope import load_registry, resolve_scope
 

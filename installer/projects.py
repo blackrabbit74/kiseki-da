@@ -136,6 +136,7 @@ def create_project(source: Path, destination: Path, *, name: str, goal: str, sco
                    role: str = "child", dry_run: bool = False):
     from .packs import MAIN_SKILLS, copy_selected_skills, get_persona, select_skills, _validate_persona
     from .project_hosts import host_files
+    from .project_guidance import render_entry
 
     source = source.expanduser().resolve()
     destination = destination.expanduser().absolute()
@@ -160,7 +161,7 @@ def create_project(source: Path, destination: Path, *, name: str, goal: str, sco
     _reject_symlink_ancestors(base / "transactions", destination)
     entry = base / "entry.py"
     files = host_files(destination, entry, names, role)
-    files[".kiseki/entry.py"] = (SOURCE_ROOT / "installer/assets/project_entry.py.tmpl").read_text(encoding="utf-8")
+    files[".kiseki/entry.py"] = render_entry(source)
     files[".kiseki/brief.md"] = _brief(name, goal, scope, rows, source_task)
     files[".kiseki/brief.md"] += (f"\n案件生成・保管スキルの操作: {sys.executable} {entry} "
                                   "project create / skills list / persona pack（必要時だけ一覧を取得）\n")
@@ -170,6 +171,12 @@ def create_project(source: Path, destination: Path, *, name: str, goal: str, sco
         "ターミナルでもこのフォルダを開き、通常どおりcodexまたはclaudeを起動できます。\n"
         "直接操作: `python3 .kiseki/entry.py task list --sid <現在のsession-id>`\n"
         "Windowsでは `py -3 .kiseki/entry.py ...` を使います。\n\n"
+        "保存先の権限診断: `python3 .kiseki/entry.py access --sid <現在のsession-id>`。"
+        "権限エラーはホストの権限確認を通し、同じ保存先・引数・sessionで再実行します。\n"
+        "案件の要点は更新・置換し、詳細と履歴は出典付きの記録へ保存します。"
+        "起動時のKiseki出力は推定2500 tokens・9000文字以内。追加の自動読込文書も確認します。\n\n"
+        "文脈量の確認: `python3 .kiseki/entry.py context-audit --sid <現在のsession-id>`。"
+        "案件直下の指示候補を合算して超過を検出し、測定外の文脈も表示します。\n\n"
         "基盤と案件状態はこのフォルダに固定されています。親との自動同期はありません。\n"
         "スキル本文の配置は外部サービスの接続完了を意味しません。各接続は利用時に確認してください。\n")
     targets = [base / "runtime", base / "state", base / "project.json", *[destination / p for p in files]]

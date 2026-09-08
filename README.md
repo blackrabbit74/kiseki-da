@@ -102,6 +102,8 @@ python3 .kiseki/entry.py search 検索語 --sid 現在のsession-id
 
 `.kiseki/`には、目的・範囲とversion/hashを記録したmanifest、固定版runtime、案件専用state、初期文脈を保存します。初期文脈の引き渡しだけで承認済みの長期記憶を作ることはありません。親子の自動同期や仕事の自動分割は行いません。
 
+CLIの保存先権限は`access`、起動文脈と追加の指示候補は案件の`context-audit`で確認できます。既存案件への案内更新も含めて、[権限エラーからの再開と文脈の維持手順](docs/CLI-CONTEXT-MAINTENANCE.md)を参照してください。
+
 既存の`project add`は、登録したフォルダだけで共通インストールを有効にする操作です。`project create`は、固定版基盤と独立stateを持つ作業環境を生成します。新しいメイン用フォルダも、`project create --role main`で`skills`を省略すると常用18個で作れます。
 
 [作成・再開・失敗時の復旧と生成物の詳細](docs/PROJECTS.md)
