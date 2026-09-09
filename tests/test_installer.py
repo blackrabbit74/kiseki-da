@@ -247,7 +247,7 @@ class InstallerTests(unittest.TestCase):
         self.env["FAKE_PLUGIN_PATH"] = str(renamed / "plugins" / "kiseki-da")
         result = self.install("codex")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn(str(self.home / "bin"), result.stdout)
+        self.assertIn(str((self.home / "bin").resolve()), result.stdout)
         # The installed runtime must be sufficient after the downloaded source is removed.
         shutil.rmtree(renamed)
         launcher = self.home / "bin" / "kiseki-da.py"
@@ -846,7 +846,7 @@ class InstallerTests(unittest.TestCase):
                               str(self.empty_answers), "--yes", "--dry-run", "--source", str(self.source))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("旧manual adapter", result.stdout)
-        self.assertIn(str(agents), result.stdout)
+        self.assertIn(str(agents.resolve()), result.stdout)
         self.assertEqual(agents.read_text(encoding="utf-8"), original)
 
     def test_explicit_legacy_import_copies_and_preserves_source(self) -> None:
