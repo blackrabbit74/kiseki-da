@@ -51,7 +51,7 @@ def _parser() -> Parser:
     p.add_argument("--host-security", choices=("preserve", "recommended"), default=None,
                    help="hostの承認・sandbox設定（既定は変更しない）")
     p.add_argument("--import-legacy", action="store_true", help="検出した旧PA_HOME/~/.paをcopyして移行する")
-    p.add_argument("--source", default=None, help=argparse.SUPPRESS)
+    p.add_argument("--source", default=None, help="検証して導入するローカルソースのフォルダ")
 
     sub.add_parser("setup", help="初期設定（インストール後のruntimeへ委譲）")
 
@@ -68,9 +68,13 @@ def _parser() -> Parser:
     p.add_argument("--yes", action="store_true")
 
     p = sub.add_parser("update", help="明示的に最新版へ更新する")
+    p.add_argument("--restart-update", action="store_true",
+                   help="旧cacheをバックアップしてnative managerで更新する。適用後は新規セッションが必要")
+    p.add_argument("--enable-plugin", action="store_true",
+                   help="--restart-updateで、保守中に無効化したKiseki DAを再有効化する")
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--yes", action="store_true")
-    p.add_argument("--source", default=None, help=argparse.SUPPRESS)
+    p.add_argument("--source", default=None, help="検証して更新するローカルソースのフォルダ")
 
     p = sub.add_parser("rollback", help="transactionを元に戻す")
     p.add_argument("--transaction", default="latest")
@@ -231,12 +235,12 @@ def _install_command(args: argparse.Namespace) -> int:
     if args.dry_run:
         preview_code, preview = install(hosts=hosts, scope=scope, project=project, answers=answers,
                                         yes=True, dry_run=True, source=source, host_security=security,
-                                        import_legacy=import_legacy)
+                                        import_legacy=import_legacy, local_source=bool(args.source))
         _emit(preview)
         return preview_code
     preview_code, preview = install(hosts=hosts, scope=scope, project=project, answers=answers,
                                     yes=True, dry_run=True, source=source, host_security=security,
-                                    import_legacy=import_legacy, allow_host_probes=True)
+                                    import_legacy=import_legacy, allow_host_probes=True, local_source=bool(args.source))
     _emit(preview)
     if not args.yes:
         if not _confirm():
@@ -244,7 +248,7 @@ def _install_command(args: argparse.Namespace) -> int:
             return 130
     code, result = install(hosts=hosts, scope=scope, project=project, answers=answers,
                            yes=args.yes, dry_run=False, source=source, host_security=security,
-                           import_legacy=import_legacy)
+                           import_legacy=import_legacy, local_source=bool(args.source))
     _emit(result, show_plan=False)
     if code == 0:
         print(f"launcher: {kiseki_home() / 'bin' / 'kiseki-da'}")
@@ -286,19 +290,26 @@ def _update_command(args: argparse.Namespace) -> int:
         if args.dry_run:
             preview_code, preview = install(hosts=hosts, scope=scope, project=project, answers={}, yes=True,
                                             dry_run=True, source=source, update_mode=True,
-                                            host_security=security)
+                                            host_security=security, restart_update=args.restart_update,
+                                            enable_plugin=args.enable_plugin,
+                                            local_source=bool(args.source or os.environ.get("KISEKI_DA_UPDATE_SOURCE")))
             _emit(preview)
             return preview_code
         preview_code, preview = install(hosts=hosts, scope=scope, project=project, answers={}, yes=True,
                                         dry_run=True, source=source, update_mode=True,
-                                        host_security=security, allow_host_probes=True)
+                                        host_security=security, allow_host_probes=True, restart_update=args.restart_update,
+                                        enable_plugin=args.enable_plugin,
+                                        local_source=bool(args.source or os.environ.get("KISEKI_DA_UPDATE_SOURCE")))
         _emit(preview)
         if not args.yes:
             if not _confirm():
                 print("中止しました。")
                 return 130
         code, result = install(hosts=hosts, scope=scope, project=project, answers={}, yes=True,
-                               dry_run=False, source=source, update_mode=True, host_security=security)
+                               dry_run=False, source=source, update_mode=True, host_security=security,
+                               restart_update=args.restart_update,
+                               enable_plugin=args.enable_plugin,
+                               local_source=bool(args.source or os.environ.get("KISEKI_DA_UPDATE_SOURCE")))
         _emit(result, show_plan=False)
         return code
 

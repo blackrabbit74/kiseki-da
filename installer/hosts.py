@@ -29,6 +29,11 @@ def _executable(host: str) -> list[str]:
     configured = os.environ.get(key)
     if configured:
         values = shlex.split(configured, posix=os.name != "nt")
+        if os.name == "nt":
+            # Non-posix shlex keeps the surrounding quotes inside each token; the
+            # command line is quoted again when the process is spawned.
+            values = [value[1:-1] if len(value) >= 2 and value[0] == value[-1] == '"' else value
+                      for value in values]
         if not values:
             raise InstallerError(f"{key} が空です。")
         return values
@@ -164,14 +169,19 @@ def _claude_user_marketplace() -> dict[str, Any] | None:
 
 
 def _codex_source_with_ref(source: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Some CLI inventories omit the configured Git ref."""
-    if not source:
-        return source
+    """Fill source fields omitted by the CLI from the exact marketplace config."""
     path = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "config.toml"
     try:
         row = tomllib.loads(path.read_text(encoding="utf-8")).get("marketplaces", {}).get(MARKETPLACE_ID, {})
     except (OSError, ValueError):
         return source
+    # Codex 0.153.4 marketplace list returns only name/root. The registered
+    # config, unlike the cache root, retains the actual local or Git source.
+    if not source:
+        if (not isinstance(row, dict) or row.get("source_type") not in {"local", "git"}
+                or not isinstance(row.get("source"), str) or not row["source"]):
+            return None
+        source = {"sourceType": row["source_type"], "source": row["source"]}
     if (isinstance(row, dict) and row.get("source") == source.get("source")
             and row.get("source_type") == source.get("sourceType")
             and isinstance(row.get("ref"), str)):
@@ -267,7 +277,7 @@ class HostManager:
         marketplace_present = claude_source is not None if self.host == "claude-code" else market is not None
         marketplace_fingerprint = (claude_source if self.host == "claude-code" else
                                    _fingerprint(market.get("marketplaceSource")) if market else None)
-        if self.host == "codex":
+        if self.host == "codex" and market is not None:
             marketplace_fingerprint = _codex_source_with_ref(marketplace_fingerprint)
         plugin = next((row for row in installed if _plugin_match(row)
                        and (self.host != "claude-code" or row.get("scope", "user") == "user")
@@ -283,9 +293,9 @@ class HostManager:
             marketplace_fingerprint=marketplace_fingerprint,
         )
 
-    def marketplace_add(self, *, version: str | None = None) -> tuple[list[str], list[str]]:
+    def marketplace_add(self, *, version: str | None = None, local_source: Path | None = None) -> tuple[list[str], list[str]]:
         tag = f"v{version}" if version else TAG
-        override = os.environ.get("KISEKI_DA_MARKETPLACE_SOURCE")
+        override = str(local_source) if local_source is not None else os.environ.get("KISEKI_DA_MARKETPLACE_SOURCE")
         if override:
             local = Path(override).expanduser().resolve()
             if not local.is_dir():

@@ -4,7 +4,7 @@
 
 Kiseki DA（Digital Assistant）は、Claude Code / Codexに、案件ごとの文脈、承認制の記憶、証拠付きタスク管理、キャラクター設定を加える個人AIハーネスです。日常の相談から、必要なスキルと初期文脈を持つ作業環境の作成・再開までを支えます。Python 3.11〜3.14の標準ライブラリで動き、外部telemetryはありません。
 
-> **v0.1.0-beta.8** — プロジェクト生成・3つのサブDA・180スキルを備え、通信失敗後の更新復旧を修正した版です。対応対象はmacOS localです。
+> **ソース版 0.1.0-beta.9 — Windows運用フィードバック**。PowerShellの誤停止、CLIの起動・証拠照合、Windows用の更新経路を修正しています。Windows 11 nativeは試験運用中です。タグ付き公開版はv0.1.0-beta.8です。
 
 ## できること
 
@@ -61,6 +61,36 @@ kiseki-da doctor --json
 更新は個人状態と実行中セッションの旧hook cacheを保持します。新版を使うときは新規セッションへ切り替えてください。**180個を共通スキルフォルダへ配置済みの場合は、下のスキル移行も別途実行します。**
 
 [導入・更新・rollbackの詳細](docs/INSTALLATION.md) ／ [プライバシー](PRIVACY.md)
+
+### Windows 11での試験運用
+
+Windowsの実運用で見つかった不具合をmainへ反映しています。Python 3.11〜3.14、Claude CodeまたはCodex CLIが必要です。PowerShellで次を実行します。GUIアプリでPythonが見つからない場合も、インストーラーが実行中のPythonをlauncherへ固定します。
+
+```powershell
+git clone --branch main https://github.com/blackrabbit74/kiseki-da.git
+cd kiseki-da
+py -3 install.py install --host all --scope user --source .
+```
+
+既存環境は、新しいソースを取得してから更新します。
+
+```powershell
+git pull --ff-only
+py -3 install.py update --source . --restart-update --dry-run
+py -3 install.py update --source . --restart-update
+& "$env:USERPROFILE\.kiseki-da\bin\kiseki-da.cmd" version
+& "$env:USERPROFILE\.kiseki-da\bin\kiseki-da.cmd" doctor --json
+```
+
+`--restart-update`は旧runtimeと対象pluginのcache・登録情報をバックアップし、ホストの正規plugin managerで新版へ切り替えます。適用後は両ホストで新規セッションを開始してください。旧セッションの継続動作は保証しません。Codexがhookの信頼確認を求めた場合は、利用者が内容を確認します。記憶・人格・証拠・未検証記録は引き継ぎます。
+
+保守中にKiseki DAを無効化していた場合は、再有効化を意図するときだけ更新コマンドに`--enable-plugin`を追加します。指定しない限り、無効なpluginを自動で有効にしません。
+
+同一versionへの上書きは行いません。通常の`kiseki-da update`はGitHubのタグ付きreleaseを対象にするため、mainの試験版には上記の`--source`付き手順を使います。従来のatomic cache交換を使う稼働中更新はWindowsでは未対応です。
+
+今回の修正では、PowerShellの`&`付きCLI、正式launcher、`Get-Content`、引用内の`release|deploy`を正しく扱い、必須制約の取得や保留がガードで止まる問題を修正しました。R1の未完了カードは注意喚起と記録に留め、完了証拠の照合とR2/R3の確認は維持します。
+
+Python試験、分離環境の実PowerShell、Claudeのモデルを呼ばない起動、Codex plugin manager、更新・復元を検証対象にしています。実アプリの連続対話・翌日の文脈品質・Windowsの性能保証は未検証です。Bash経由のhook呼出は約1.7〜3.5秒（並行試験を含む）を観測しており、macOS向け300ms目標の達成とは扱いません。[保守と復元の手順](docs/MAINTENANCE.md)
 
 ## 専用DAのいるプロジェクトを作る
 
@@ -164,9 +194,9 @@ python3 scripts/check_project_implementation.py
 ## 対応範囲と資料
 
 - Host: Claude Code `>=2.1.142`、Codex `>=0.151.0`
-- OS: macOS local。Linux localはbeta観測中
+- OS: macOS local。Linux localとWindows 11 nativeはbeta観測中（Windowsはmainのソース版から導入）
 - App: Codexの`Local`、Claude DesktopのCodeタブのlocal session
-- 対象外: Windows 11 native、WSL2、cloud session、Codex管理Worktree、Cursor、無人実行
+- 対象外: WSL2、cloud session、Codex管理Worktree、Cursor、無人実行
 
 [アーキテクチャ](docs/ARCHITECTURE.md) ／ [変更履歴](CHANGELOG.md) ／ [リリース判断](docs/RELEASE-DECISIONS.md) ／ [脆弱性の連絡](SECURITY.md)
 

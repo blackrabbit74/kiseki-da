@@ -89,6 +89,7 @@ class ProjectGuidanceTests(unittest.TestCase):
         self.entry.write_bytes(old)
         (self.runtime / "installer/assets/project_entry.py.tmpl").write_bytes(old)
         manifest = json.loads(self.manifest.read_text())
+        manifest["runtime"]["version"] = "0.1.0-beta.8"
         manifest["runtime"]["sha256"] = _tree_digest(self.runtime)
         self.manifest.write_text(json.dumps(manifest))
 

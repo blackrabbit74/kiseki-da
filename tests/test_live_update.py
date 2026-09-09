@@ -11,6 +11,32 @@ from installer.util import InstallerError
 
 
 class LiveUpdateTransactionTests(unittest.TestCase):
+    def test_missing_disabled_cache_recovery_stays_inside_owned_plugin_family(self):
+        from installer.operations import _restart_cache_family
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw).resolve()
+            family = root / "plugins/cache/kiseki-da/kiseki-da"
+            with mock.patch("installer.operations.host_security_mod.config_path", return_value=root / "config.toml"):
+                with self.assertRaises(InstallerError):
+                    _restart_cache_family("codex", str(family / "old"))
+                self.assertEqual(_restart_cache_family("codex", str(family / "old"), allow_missing=True), family)
+                with self.assertRaises(InstallerError):
+                    _restart_cache_family("codex", str(root / "plugins/cache/unrelated/old"), allow_missing=True)
+
+    def test_windows_live_update_stops_before_transaction_but_reads_and_new_installs_work(self):
+        from installer.operations import _check_live_update_platform
+        from types import SimpleNamespace
+        inventory = {"codex": SimpleNamespace(plugin=True)}
+        ownership = {"codex": {"plugin": True}}
+        with mock.patch("installer.operations.os.name", "nt"):
+            with self.assertRaisesRegex(InstallerError, "状態は変更していません"):
+                _check_live_update_platform(["codex"], inventory, ownership, replacing=True, dry_run=False)
+            _check_live_update_platform(["codex"], inventory, ownership, replacing=True, dry_run=True)
+            _check_live_update_platform(["codex"], inventory, ownership, replacing=False, dry_run=False)
+            _check_live_update_platform(["claude-code"], {}, {}, replacing=True, dry_run=False)
+            _check_live_update_platform(["codex"], inventory, ownership,
+                                        replacing=True, dry_run=False, restart_update=True)
+
     @unittest.skipUnless(sys.platform == "darwin" or sys.platform.startswith("linux"), "atomic cache exchange target")
     def test_selection_keeps_old_paths_but_only_one_real_version(self):
         from installer.cache import select_cache

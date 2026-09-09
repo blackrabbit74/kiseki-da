@@ -25,8 +25,8 @@ SHA_EMPTY = hashlib.sha256(b"").hexdigest()[:12]
 
 def fixture(name: str, cwd: str) -> dict:
     """__FX__ = fixtures dir, __CWD__ = the test workspace, __REPO__ = this checkout (codex-pre-tool-patch.json)."""
-    text = (FX / name).read_text(encoding="utf-8").replace("__FX__", str(FX)).replace("__CWD__", cwd)
-    text = text.replace("__REPO__", str(S.REPO_ROOT))
+    text = (FX / name).read_text(encoding="utf-8").replace("__FX__", FX.as_posix()).replace("__CWD__", Path(cwd).as_posix())
+    text = text.replace("__REPO__", S.REPO_ROOT.as_posix())
     return json.loads(text)
 
 
@@ -80,7 +80,7 @@ class ClaudeCodeFixtureTestCase(HookBase):
         env = os.environ.copy()
         denied = subprocess.run(
             [sys.executable, str(CLI), "task", "new", "--goal", "must not mix",
-             "--risk", "R1", "--id", "sid-card"],
+             "--risk", "R2", "--id", "sid-card"],
             cwd=self.ws / "repo", env=env, capture_output=True, text=True, check=False,
         )
         self.assertEqual(denied.returncode, 1)
@@ -89,7 +89,7 @@ class ClaudeCodeFixtureTestCase(HookBase):
 
         explicit = subprocess.run(
             [sys.executable, str(CLI), "task", "new", "--goal", "belongs to A",
-             "--risk", "R1", "--id", "sid-card", "--sid", "claude-A"],
+             "--risk", "R2", "--id", "sid-card", "--sid", "claude-A"],
             cwd=self.ws / "repo", env=env, capture_output=True, text=True, check=False,
         )
         self.assertEqual(explicit.returncode, 0, explicit.stderr)
@@ -108,8 +108,8 @@ class ClaudeCodeFixtureTestCase(HookBase):
     def test_c1_session_start_emits_context_and_events(self):
         hi, out, stdout, st = self.run_fixture("session-start", "cc-session-start.json")
         self.assertEqual((hi.env, hi.event, hi.sid, hi.source), ("claude-code", "session-start", "s-demo-1", "startup"))
-        self.assertEqual(hi.cwd, str(self.ws / "repo"))
-        self.assertEqual(hi.transcript_path, str(TRANSCRIPT))
+        self.assertEqual(Path(hi.cwd), self.ws / "repo")
+        self.assertEqual(Path(hi.transcript_path), TRANSCRIPT)
         self.assertTrue(stdout)
         self.assertIn("session: s-demo-1", stdout)
         policy = (S.REPO_ROOT / "core" / "policy" / "interaction.md").read_text(encoding="utf-8").strip()
@@ -148,7 +148,7 @@ class ClaudeCodeFixtureTestCase(HookBase):
         ev = self.events({"tool_call"})[0]
         self.assertEqual(ev["tool"], "Read")
         self.assertIs(ev["ok"], True)
-        self.assertEqual(ev["target"], str(self.ws / "repo" / "git-diff.txt"))
+        self.assertEqual(Path(ev["target"]), self.ws / "repo" / "git-diff.txt")
         expected = S.dumps(hi.raw["tool_response"])
         self.assertEqual(ev["out_len"], len(expected))
         self.assertEqual(ev["out_hash"], hashlib.sha256(expected.encode("utf-8")).hexdigest()[:12])
@@ -164,9 +164,9 @@ class ClaudeCodeFixtureTestCase(HookBase):
         self.assertEqual(ev["out_hash"], "e3b0c44298fc")
         self.assertEqual(ev["target"], "pytest tests/test_other.py -q")
 
-    def test_c4_stop_blocks_once_for_open_r1_card(self):
+    def test_c4_stop_blocks_once_for_open_r2_card(self):
         st = Store(home=self.home, sid="s-demo-1")
-        taskcard.new_card(st, "認証トークンの自動更新を追加する", risk="R1", id="demo-auth")
+        taskcard.new_card(st, "認証トークンの自動更新を追加する", risk="R2", id="demo-auth")
         hi, out, stdout, _ = self.run_fixture("stop", "cc-stop.json")
         self.assertFalse(hi.stop_hook_active)
         self.assertEqual(out.decision, "block")
@@ -191,7 +191,7 @@ class ClaudeCodeFixtureTestCase(HookBase):
 
     def test_stop_hook_active_never_blocks(self):
         st = Store(home=self.home, sid="s-demo-1")
-        taskcard.new_card(st, "x", risk="R1", id="demo-auth")
+        taskcard.new_card(st, "x", risk="R2", id="demo-auth")
         payload = fixture("cc-stop.json", str(self.ws))
         payload["stop_hook_active"] = True
         hi, out, stdout, _ = self.run_hook("stop", payload)
@@ -276,7 +276,7 @@ class ClaudeCodeFixtureTestCase(HookBase):
 
     def test_every_hook_event_carries_the_payload_sid(self):
         st = Store(home=self.home, sid="s-demo-1")
-        taskcard.new_card(st, "x", risk="R1", id="demo-auth")
+        taskcard.new_card(st, "x", risk="R2", id="demo-auth")
         for event, name in (("post-tool", "cc-post-tool-pytest.json"), ("stop", "cc-stop.json"),
                             ("pre-tool", "cc-pre-tool-pytest.json"), ("session-end", "cc-session-end.json")):
             self.run_fixture(event, name)
@@ -335,7 +335,7 @@ class OtherEnvFixtureTestCase(HookBase):
 
     def test_codex_session_start(self):
         hi, out, stdout, st = self.codex("codex-session-start.json")
-        self.assertEqual((hi.sid, hi.cwd, hi.source), ("cx-demo-1", str(self.ws / "repo"), "startup"))
+        self.assertEqual((hi.sid, Path(hi.cwd), hi.source), ("cx-demo-1", self.ws / "repo", "startup"))
         data = json.loads(stdout)["hookSpecificOutput"]
         self.assertEqual(data["hookEventName"], "SessionStart")
         self.assertIn("session: cx-demo-1", data["additionalContext"])
@@ -365,7 +365,7 @@ class OtherEnvFixtureTestCase(HookBase):
         hi, out, stdout, _ = self.codex("codex-pre-tool-patch.json")
         self.assertEqual(hi.tool, "Edit")
         self.assertEqual(hi.tool_input["file_paths"], ["core/ctx/store.py"])
-        self.assertEqual(hi.cwd, str(S.REPO_ROOT))
+        self.assertEqual(Path(hi.cwd), S.REPO_ROOT)
         self.assertEqual(out.decision, "deny")
         self.assertIn("core/", out.reason)
         self.assertEqual(json.loads(stdout)["hookSpecificOutput"]["permissionDecision"], "deny")
@@ -398,7 +398,7 @@ class OtherEnvFixtureTestCase(HookBase):
 
     def test_codex_stop_blocks_once(self):
         st = Store(home=self.home, sid="cx-demo-1")
-        taskcard.new_card(st, "x", risk="R1", id="cx-card")
+        taskcard.new_card(st, "x", risk="R2", id="cx-card")
         hi, out, stdout, _ = self.codex("codex-stop.json")
         self.assertFalse(hi.stop_hook_active)
         data = json.loads(stdout)
@@ -416,7 +416,7 @@ class OtherEnvFixtureTestCase(HookBase):
         Store(home=self.home).set_current_sid("cx-demo-1")
         hi, out, stdout, st = self.codex("codex-session-end.json")
         self.assertEqual(stdout, "")
-        self.assertEqual(hi.transcript_path, str(self.ws / "rollout.jsonl"))
+        self.assertEqual(Path(hi.transcript_path), self.ws / "rollout.jsonl")
         end = self.events({"session_end"}, sid="cx-demo-1")[0]
         self.assertEqual((end["reason"], end["candidates_created"]), ("other", 0))
         self.assertEqual(Store(home=self.home).candidates(), [])
@@ -721,7 +721,7 @@ class SubprocessFailOpenTestCase(unittest.TestCase):
                               env={**os.environ, "KISEKI_DA_HOME": str(self.home), **env}, cwd=str(self.ws), timeout=60)
 
     def raw_fixture(self, name: str) -> str:
-        return (FX / name).read_text(encoding="utf-8").replace("__FX__", str(FX)).replace("__CWD__", str(self.ws))
+        return (FX / name).read_text(encoding="utf-8").replace("__FX__", FX.as_posix()).replace("__CWD__", self.ws.as_posix())
 
     def errors(self) -> list[dict]:
         return list(Store(home=self.home).iter_events(types={"error"}))

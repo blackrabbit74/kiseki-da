@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.0-beta.9 ソース版 - 2026-09-09 Windows運用フィードバック
+
+- Windows向け`update --restart-update`を追加。対象cacheと登録情報をtransactionに保存し、native plugin managerで更新する。更新後は新規セッションが必要。
+- `--source`で指定したソースをmaterialize済みruntimeから両ホストへ導入し、別のGitHubタグが混ざるのを防ぐ。
+- symlinkを作れないWindowsのcloneでも、Claudeの共有runtimeを導入時に構成する。main先行の保存先権限診断・案件文脈の維持修正を含む。
+
+- PowerShellの固定CLI、導入記録と一致するlauncher、通常読取、引用内の検索式を判定できるよう修正。未読制約があっても制約取得・状態確認・保留を可能にした。
+- 必須制約を全openカードから安定した順序で取得し、R1のStopを一度の注意喚起へ変更。R2・R3、秘密情報保護、完了証拠、現在の利用者指示の照合は維持。
+- Windowsの方針内CLI表示、検証runnerの入力照合、同時刻snapshotの保持順を修正。Windows用のfixtureとsmokeを整備。
+- 導入時にClaudeの共有runtimeをcanonicalから再構成し、管理launcherのhashを記録。未対応のWindows Codex live updateは状態を変更する前に停止する。
+- 本体保守の手順と分離環境でのWindows検証スクリプトを追加。本番反映と実アプリの連続対話は別途確認が必要。
+
 ## 0.1.0-beta.8 - 2026-09-07
 
 - 通信失敗後のrollback再試行で、インストーラー自身が復元済みのhost設定を同時編集と誤判定する不具合を修正。

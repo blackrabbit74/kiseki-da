@@ -14,7 +14,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash|apply_patch|Edit|Write",
+        "matcher": "Bash|PowerShell|shell|exec_command|apply_patch|Edit|Write|Delete|NotebookEdit",
         "hooks": [
           {
             "type": "command",

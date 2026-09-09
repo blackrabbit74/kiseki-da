@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import os
 import shutil
 import subprocess
@@ -33,6 +34,19 @@ class TaskcardTestCase(unittest.TestCase):
     # ------------------------------------------------------------ helpers
     def events(self, types: set[str] | None = None) -> list[dict]:
         return list(self.st.iter_events(types=types))
+
+    def load_fixture_events(self):
+        rows = [json.loads(line) for line in (FX / "events.sample.jsonl").read_text(encoding="utf-8").splitlines()]
+        # Fixture hashes contain POSIX absolute paths. Rebind this synthetic data
+        # to the platform running the test, without changing live evidence rules.
+        if os.name == "nt":
+            for row in rows:
+                if row.get("type") == "tool_call":
+                    row["cwd"] = str(Path(row["cwd"]).resolve())
+                    row["workspace"] = str(Path(row["workspace"]).resolve())
+                    data = {"command" if row["tool"] == "Bash" else "file_path": row["target"]}
+                    row["request_hash"] = E.identity(row["tool"], data, row["cwd"])
+        self.st.events_path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
 
     def tool_call(self, tool: str, target: str, ok=True, sid: str | None = None) -> str:
         data={'command':target} if tool=='Bash' else {'file_path':target}
@@ -153,7 +167,7 @@ class IdValidationTests(TaskcardTestCase):
 class CheckEvidenceTests(TaskcardTestCase):
     def setUp(self):
         super().setUp()
-        shutil.copy(FX / "events.sample.jsonl", self.st.events_path)
+        self.load_fixture_events()
 
     def check(self, evidence: str, check: str):
         return T.check_evidence(self.st, T.Criterion("C1", "claim", check, evidence, "open"))
@@ -192,8 +206,8 @@ class CheckEvidenceTests(TaskcardTestCase):
     def test_missing_evidence_keeps_criterion_order(self):
         shutil.copy(FX / "task.sample.md", self.st.task_path(SAMPLE_ID))
         card = T.load(self.st, SAMPLE_ID)
-        card.workspace = "/repo"
-        self.st.set_workspace("/repo")
+        card.workspace = str(Path("/repo").resolve())
+        self.st.set_workspace(card.workspace)
         self.assertEqual([(c.id, r) for c, r in T.missing_evidence(self.st, card)], [("C2", "no evidence")])
         card.criteria[0].evidence = "ev:s-fx-1:7"
         self.assertEqual([(c.id, r) for c, r in T.missing_evidence(self.st, card)],
@@ -390,11 +404,11 @@ class CloseDeferTests(TaskcardTestCase):
                          {"task": card.id, "risk": "R1", "status": "done"})
 
     def test_close_fixture_card_end_to_end(self):
-        shutil.copy(FX / "events.sample.jsonl", self.st.events_path)
+        self.load_fixture_events()
         shutil.copy(FX / "task.sample.md", self.st.task_path(SAMPLE_ID))
         card = T.load(self.st, SAMPLE_ID)
-        card.workspace = "/repo"
-        self.st.set_workspace("/repo")
+        card.workspace = str(Path("/repo").resolve())
+        self.st.set_workspace(card.workspace)
         self.assertEqual(T.close(self.st, card), ["C2: no evidence"])
         T.set_evidence(self.st, card, "C2", "ev:s-fx-1:7")  # failed pytest run
         self.assertEqual(T.close(self.st, card), ["C2: command failed"])
@@ -471,7 +485,8 @@ class CloseDeferTests(TaskcardTestCase):
         cases = [
             (["task", "defer", "t2"], "--reason を指定してください"),
             (["task", "defer", "t2", "--reason"], "--reason に値がありません"),
-            (["task", "set", "t", "--risk", "R9"], "--risk は 'R0', 'R1', 'R2', 'R3' のいずれかです（指定値: 'R9'）"),
+            (["task", "set", "t", "--risk", "R9"], "--risk は " +
+             ("'R0', 'R1', 'R2', 'R3'" if sys.version_info >= (3, 13) else "R0, R1, R2, R3") + " のいずれかです（指定値: 'R9'）"),
             (["task", "set", "t", "--foo"], "不明な引数です: --foo"),
             (["build", "--budget", "abc"], "--budget は整数で指定してください（指定値: 'abc'）"),
             (["report"], "--week --audit のいずれかを指定してください"),

@@ -202,7 +202,7 @@ def handle(store: Store, hi: HookInput) -> HookOutput:
         return HookOutput()  # record provenance; never inject a recurring prompt block
     if hi.event == "pre-tool":
         decision, reason = gate.guard(hi.tool or "", hi.tool_input or {}, hi.cwd)
-        if decision != "deny" and E.effect(hi.tool or "", hi.tool_input or {}) in ("write", "unknown"):
+        if decision != "deny" and E.effect(hi.tool or "", hi.tool_input or {}, hi.cwd) in ("write", "unknown"):
             from core.ctx import build
             if build.needs_context(store):
                 decision, reason = "deny", "必須制約の取得が必要です。kiseki-da context required の全ページを読み、同じ操作を再実行してください"
@@ -220,14 +220,14 @@ def handle(store: Store, hi: HookInput) -> HookOutput:
                             "out_hash": hashlib.sha256(text.encode("utf-8", "replace")).hexdigest()[:12],
                             "tool_use_id": hi.raw.get("tool_use_id"), "workspace": store.workspace(),
                             "cwd": hi.cwd, "request_hash": E.identity(hi.tool or "", hi.tool_input or {}, hi.cwd),
-                            "effect": E.effect(hi.tool or "", hi.tool_input or {}),
+                            "effect": E.effect(hi.tool or "", hi.tool_input or {}, hi.cwd),
                             "artifact": E.file_snapshot(hi.tool or "", hi.tool_input or {}, hi.cwd)})
         if hi.env != "claude-code" and _is_external(hi.tool):
             return HookOutput(context=EXTERNAL_CONTEXT)
         return HookOutput()
     if hi.event == "stop":
         blocked, reason = gate.stop_gate(store, hi.sid, hi.stop_hook_active)   # A-12: always called
-        return HookOutput(decision="block", reason=reason) if blocked else HookOutput()
+        return HookOutput(decision="block", reason=reason) if blocked else HookOutput(reason=reason)
     if hi.event == "session-end":
         created = 0
         if hi.transcript_path and hi.env == "claude-code":
@@ -270,6 +270,8 @@ def format_output(hi: HookInput, out: HookOutput) -> tuple[str, str, int]:
                                                "permissionDecisionReason": reason}})
     elif hi.event == "stop" and out.decision == "block":
         stdout = dumps({"decision": "block", "reason": out.reason or ""})
+    elif hi.event == "stop" and out.reason:
+        stdout = dumps({"systemMessage": out.reason})
     return stdout, "", 0
 
 

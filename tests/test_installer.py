@@ -50,7 +50,7 @@ if args == ["plugin", "--help"]:
     raise SystemExit(0)
 if args[:4] == ["plugin", "marketplace", "list", "--json"]:
     print(json.dumps({"marketplaces": [{"name": "kiseki-da", "marketplaceSource": {
-        "sourceType": "local" if record.get("marketplace_source", "").startswith("/") else "git",
+        "sourceType": "local" if Path(record.get("marketplace_source", "")).is_dir() else "git",
         "source": record.get("marketplace_source", "https://github.com/blackrabbit74/kiseki-da.git"),
         "ref": record.get("marketplace_ref", "v0.1.0-beta.1")}}]
                       if record["marketplace"] else []}))
@@ -89,6 +89,9 @@ if args[:3] == ["plugin", "marketplace", "add"]:
     elif len(args) > 3 and "#v" in args[3]:
         record["version"] = args[3].rsplit("#v", 1)[1]
         record["marketplace_ref"] = "v" + record["version"]
+    elif (Path(args[3]) / "VERSION").is_file():
+        record["version"] = (Path(args[3]) / "VERSION").read_text().strip()
+        record.pop("marketplace_ref", None)
 elif args[:3] == ["plugin", "marketplace", "remove"]:
     record["marketplace"] = False
 elif len(args) >= 2 and args[:2] in (["plugin", "install"], ["plugin", "add"], ["plugin", "update"]):
@@ -119,8 +122,9 @@ if host == "claude-code" and args[:3] in (["plugin", "marketplace", "add"],
         data = {}
     extra = data.setdefault("extraKnownMarketplaces", {})
     if args[2] == "add":
-        extra["kiseki-da"] = {"source": {"source": "url", "url": record["marketplace_source"],
-                                             "ref": record.get("marketplace_ref", "v0.1.0-beta.1")}}
+        extra["kiseki-da"] = {"source": ({"source": "directory", "path": record["marketplace_source"]}
+            if Path(record["marketplace_source"]).is_dir() else {"source": "url", "url": record["marketplace_source"],
+                                                                 "ref": record.get("marketplace_ref", "v0.1.0-beta.1")})}
     else:
         extra.pop("kiseki-da", None)
         if not extra:
@@ -197,6 +201,8 @@ class InstallerTests(unittest.TestCase):
         (target / "VERSION").write_text(version + "\n", encoding="utf-8")
         shutil.copytree(ROOT / "installer", target / "installer", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         shutil.copytree(ROOT / "plugins", target / "plugins", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        from installer.operations import _materialize_claude_runtime
+        _materialize_claude_runtime(target)
         shutil.copytree(ROOT / ".claude-plugin", target / ".claude-plugin")
         shutil.copytree(ROOT / ".agents", target / ".agents")
         version_paths = (
@@ -275,6 +281,9 @@ class InstallerTests(unittest.TestCase):
         metadata = json.loads((self.home / "install.json").read_text(encoding="utf-8"))
         self.assertEqual(metadata["hosts"], ["claude-code", "codex"])
         self.assertEqual(metadata["security_settings"], "preserve")
+        for record in metadata["management_launchers"]:
+            self.assertEqual(hashlib.sha256(Path(record["path"]).read_bytes()).hexdigest(), record["sha256"])
+        self.assertEqual(len(metadata["management_launchers"]), 4)
         self.assertTrue(metadata["host_ownership"]["claude-code"]["marketplace_fingerprint"])
         self.assertTrue(metadata["host_ownership"]["codex"]["marketplace_fingerprint"])
         pointer = Path(self.env["KISEKI_DA_POINTER"])
@@ -474,17 +483,25 @@ class InstallerTests(unittest.TestCase):
 
     def test_explicit_update_switches_version_and_refreshes_plugin(self) -> None:
         self.assertEqual(self.install("codex").returncode, 0)
+        before = {name: (self.home / name).read_bytes() for name in ("current.json", "profile.toml", "install.json")}
+        transactions = set((self.home / "transactions").iterdir())
         newer = self.base / "new-source"
         self._make_source(newer, "0.1.0-beta.2")
         env = dict(self.env)
         env["FAKE_PLUGIN_PATH"] = str(newer / "plugins" / "kiseki-da")
         result = self.run_cli("update", "--yes", "--source", str(newer), env=env)
+        if os.name == "nt":
+            self.assertEqual(result.returncode, 1, result.stderr + result.stdout)
+            self.assertIn("状態は変更していません", result.stderr)
+            self.assertEqual(before, {name: (self.home / name).read_bytes() for name in before})
+            self.assertEqual(transactions, set((self.home / "transactions").iterdir()))
+            return
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         current = json.loads((self.home / "current.json").read_text(encoding="utf-8"))
         self.assertEqual(current["version"], "0.1.0-beta.2")
         log = "\n".join(self.mutation_log())
         self.assertNotIn("plugin remove kiseki-da@kiseki-da", log)
-        self.assertIn("--ref v0.1.0-beta.2", log)
+        self.assertIn(str(self.home / "runtime" / "0.1.0-beta.2"), log)
 
     def test_claude_update_uses_inventory_path_after_plain_text_install(self) -> None:
         installed = self.install("claude-code")
@@ -605,7 +622,10 @@ class InstallerTests(unittest.TestCase):
         pointer = Path(self.env["KISEKI_DA_POINTER"])
         pointer.write_text(str(self.home.resolve()) + "\n", encoding="utf-8")
         os.chmod(pointer, 0o600)
-        self.assertEqual(self.install("codex").returncode, 0)
+        before = pointer.read_bytes()
+        installed = self.install("codex")
+        self.assertEqual(installed.returncode, 0, installed.stderr + installed.stdout)
+        self.assertEqual(pointer.read_bytes(), before)
         metadata = json.loads((self.home / "install.json").read_text(encoding="utf-8"))
         self.assertFalse(metadata["location_pointer"]["owned"])
         result = self.run_cli("uninstall", "--host", "codex", "--yes")
@@ -783,7 +803,7 @@ class InstallerTests(unittest.TestCase):
             def inventory(self):
                 return Inventory(False, False, [], [])
 
-            def marketplace_add(self, *, version=None):
+            def marketplace_add(self, *, version=None, local_source=None):
                 return ([sys.executable, str(self.fake), "claude-code", "plugin", "marketplace", "add", "source"],
                         [sys.executable, str(self.fake), "claude-code", "plugin", "marketplace", "remove", "kiseki-da"])
 
@@ -965,7 +985,9 @@ class InstallerTests(unittest.TestCase):
         env = dict(self.env)
         env["FAKE_PLUGIN_PATH"] = str(newer / "plugins" / "kiseki-da")
         updated = self.run_cli("update", "--yes", "--source", str(newer), env=env)
-        self.assertEqual(updated.returncode, 0, updated.stderr + updated.stdout)
+        self.assertEqual(updated.returncode, 1 if os.name == "nt" else 0, updated.stderr + updated.stdout)
+        if os.name == "nt":
+            self.assertIn("状態は変更していません", updated.stderr)
         registry = json.loads((self.home / "projects.json").read_text(encoding="utf-8"))
         self.assertEqual(registry["mode"], "project")
         self.assertEqual({row["path"] for row in registry["projects"]},
@@ -995,7 +1017,9 @@ class InstallerTests(unittest.TestCase):
         env = dict(self.env)
         env["FAKE_PLUGIN_PATH"] = str(newer / "plugins" / "kiseki-da")
         updated = self.run_cli("update", "--yes", "--source", str(newer), env=env)
-        self.assertEqual(updated.returncode, 0, updated.stderr + updated.stdout)
+        self.assertEqual(updated.returncode, 1 if os.name == "nt" else 0, updated.stderr + updated.stdout)
+        if os.name == "nt":
+            self.assertIn("状態は変更していません", updated.stderr)
         registry = json.loads((self.home / "projects.json").read_text(encoding="utf-8"))
         self.assertEqual(registry, {"schema": 1, "mode": "project", "projects": []})
 

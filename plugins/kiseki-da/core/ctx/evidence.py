@@ -8,6 +8,8 @@ import hashlib
 import json
 import re
 import shlex
+import shutil
+import sys
 from pathlib import Path
 
 READ_TOOLS = frozenset({"read", "grep", "glob", "webfetch", "websearch", "view_image"})
@@ -37,7 +39,9 @@ def identity(tool: str, tool_input: dict, cwd: str) -> str:
     data = dict(tool_input)
     if name in SHELL_TOOLS:
         name = "bash"
-        data = {"command": words(str(data.get("command", ""))) or str(data.get("command", "")).strip()}
+        command = shell_command(data)
+        # Keep operator-bearing scripts distinct from quoted literal arguments.
+        data = {"command": (words(command) if simple_words(command) else command.strip()) or command.strip()}
     elif name == "read":
         raw = str(data.get("file_path") or data.get("path") or "")
         data = {"file_path": absolute(raw, cwd)}
@@ -72,27 +76,165 @@ def expected(check: str, cwd: str) -> str | None:
     return identity("Bash", {"command": check}, cwd)
 
 
-def is_ctx(command: str) -> bool:
-    args = words(command)
-    return len(args) >= 3 and Path(args[1]).resolve() == Path(__file__).resolve().with_name("cli.py")
+def matches(event: dict, check: str, cwd: str) -> bool:
+    wanted = expected(check, cwd)
+    if wanted is None:
+        return False
+    if event.get("request_hash") == wanted:
+        return True
+    # The no-shell runner derives both renderings from the very same executed
+    # argv. Keep only hashes, and preserve existing Windows criterion strings.
+    return (str(event.get("tool_use_id", "")).startswith("verify-")
+            and event.get("argv_request_hash") == wanted)
 
 
-def ctx_command(command: str) -> str | None:
-    if not is_ctx(command):
+def simple_words(command: str) -> list[str]:
+    """Parse a literal single invocation, never evaluate shell syntax or expansion.
+
+    Backslashes in Windows paths remain intact. Ambiguous quoting, expansion,
+    pipelines, redirection and scripts are deliberately unclassified.
+    """
+    command = command.strip()
+    if command.startswith("& ") or command.startswith("&\t"):
+        command = command[1:].lstrip()  # PowerShell call operator, only at the start
+    args, token, quote, started = [], "", None, False
+    i = 0
+    while i < len(command):
+        ch = command[i]
+        if quote:
+            if ch == quote:
+                if quote == "'" and command[i:i + 2] == "''":
+                    token += "'"
+                    i += 2
+                    continue
+                quote = None
+            elif quote == '"' and (ch in "$`" or command[i:i + 2] == '\\"'):
+                return []
+            else:
+                token += ch
+        elif ch in "'\"":
+            quote, started = ch, True
+        elif ch in ";&|<>`\n\r$(){}#":
+            return []
+        elif ch.isspace():
+            if started:
+                args.append(token)
+                token, started = "", False
+        else:
+            token += ch
+            started = True
+        i += 1
+    if quote:
+        return []
+    if started:
+        args.append(token)
+    return args
+
+
+def shell_command(tool_input: dict) -> str:
+    return str(tool_input.get("command", tool_input.get("cmd", "")))
+
+
+def _executable(raw: str, cwd: str) -> Path | None:
+    if "/" in raw or "\\" in raw:
+        return Path(absolute(raw, cwd or "."))
+    found = shutil.which(raw)
+    return Path(found).resolve() if found else None
+
+
+def python_script(args: list[str], cwd: str = "", *, trusted: bool = True) -> int | None:
+    if not args:
         return None
-    args = words(command)
-    i = 2
+    if trusted:
+        if _executable(args[0], cwd) != Path(sys.executable).resolve():
+            return None
+    elif not re.fullmatch(r"(?:python(?:\d+(?:\.\d+)*)?|py)(?:\.exe)?", Path(args[0]).name, re.I):
+        return None
+    i = 1
+    while i < len(args) and args[i] in {"-B", "-I", "-u", "-E", "-s"}:
+        i += 1
+    return i if i < len(args) and not args[i].startswith("-") else None
+
+
+def _managed_launcher(path: Path | None) -> bool:
+    """Installer-owned launchers and bootstrap must still match their saved hashes."""
+    if path is None:
+        return False
+    from core.ctx.store import kiseki_da_home
+    home = kiseki_da_home()
+    try:
+        metadata = json.loads((home / "install.json").read_text(encoding="utf-8"))
+        current = json.loads((home / "current.json").read_text(encoding="utf-8"))
+        runtime = Path(current["runtime"]).resolve()
+        if not runtime.is_relative_to(home / "runtime"):
+            return False
+        selected = runtime / "plugins/kiseki-da/core/ctx"
+        for filename in ("evidence.py", "cli.py"):
+            if (selected / filename).read_bytes() != Path(__file__).with_name(filename).read_bytes():
+                return False
+        records = {Path(row["path"]).resolve(): row["sha256"]
+                   for row in metadata.get("management_launchers", [])}
+        bootstrap = home / "bin/kiseki-da.py"
+        return all(p in records and hashlib.sha256(p.read_bytes()).hexdigest() == records[p]
+                   for p in (path, bootstrap))
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+
+
+def ctx_args(command: str, cwd: str = "", *, trusted: bool = True) -> list[str]:
+    args = simple_words(command)
+    i = python_script(args, cwd, trusted=trusted)
+    if i is not None:
+        script = Path(absolute(args[i], cwd or "."))
+        if script == Path(__file__).resolve().with_name("cli.py") or (trusted and _managed_launcher(script)):
+            return args[i + 1:]
+    if trusted and args and _managed_launcher(_executable(args[0], cwd)):
+        return args[1:]
+    return []
+
+
+def is_ctx(command: str, cwd: str = "") -> bool:
+    return bool(ctx_args(command, cwd))
+
+
+def ctx_command(command: str, cwd: str = "", *, trusted: bool = True) -> str | None:
+    args = ctx_args(command, cwd, trusted=trusted)
+    i = 0
     while i < len(args):
         if args[i] in ("--home", "--sid"):
             i += 2
         elif args[i] == "--json":
+            i += 1
+        elif args[i].startswith(("--sid=", "--home=")):
             i += 1
         else:
             return args[i]
     return None
 
 
-def effect(tool: str, tool_input: dict) -> str:
+def metadata_command(command: str, cwd: str = "") -> bool:
+    args = ctx_args(command, cwd)
+    while args:
+        if args[0] in {"--home", "--sid"}:
+            args = args[2:]
+        elif args[0] == "--json" or args[0].startswith(("--home=", "--sid=")):
+            args = args[1:]
+        else:
+            break
+    if not args:
+        return False
+    if args[0] in {"search", "report", "build", "version"}:
+        return True
+    if args[0] == "doctor":
+        return all(arg == "--json" for arg in args[1:])
+    allowed = {"context": {"required", "instruction", "profile"},
+               "task": {"new", "set", "show", "list", "close", "defer", "brief", "override"},
+               "policy": {"show"}, "persona": {"show", "pack"},
+               "candidate": {"list", "show"}, "session": {"list"}, "skills": {"list", "show"}}
+    return len(args) > 1 and args[1] in allowed.get(args[0], set())
+
+
+def effect(tool: str, tool_input: dict, cwd: str = "") -> str:
     name = tool.lower()
     if name in READ_TOOLS:
         return "read"
@@ -100,18 +242,29 @@ def effect(tool: str, tool_input: dict) -> str:
         return "write"
     if name not in SHELL_TOOLS:
         return "unknown"
-    command = str(tool_input.get("command", ""))
-    if is_ctx(command):
+    command = shell_command(tool_input)
+    if metadata_command(command, cwd):
         return "metadata"
-    args = words(command)
-    if not args or re.search(r"[;&|<>`\n]|\$\(", command):
+    args = simple_words(command)
+    if not args:
         return "unknown"
     head = Path(args[0]).name.lower()
+    if head in {"remove-item", "set-content", "add-content", "out-file", "copy-item", "move-item", "new-item"}:
+        return "write"
+    if head in {"get-content", "get-childitem", "get-item", "get-location", "get-filehash",
+                "test-path", "select-string", "sls", "gc", "gci", "pwd", "dir"}:
+        return "read"
     if head in {"rm", "mv", "cp", "mkdir", "rmdir", "touch", "tee", "chmod", "chown"}:
         return "write"
+    if head == "rg" and any(arg == "--pre" or arg.startswith("--pre=") for arg in args[1:]):
+        return "unknown"
     if head in {"pytest", "cat", "head", "tail", "rg", "grep", "ls", "pwd", "wc", "stat", "diff"}:
         return "read"
     if head == "git" and len(args) > 1 and args[1] in {"diff", "status", "log", "show", "rev-parse"}:
+        if any(arg == "--output" or arg.startswith("--output=") for arg in args[2:]):
+            return "write"
+        if "--ext-diff" in args or "--textconv" in args:
+            return "unknown"
         return "read"
     if head in {"python", "python3"} and args[1:3] in (["-m", "pytest"], ["-m", "unittest"]):
         return "read"

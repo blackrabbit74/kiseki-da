@@ -54,7 +54,7 @@ def _validate_platform_home(home: Path) -> None:
         if not powershell:
             raise InstallerError("Windows state ACLを検証するPowerShellがありません。")
         script = (
-            "$p=$args[0];$bad=@((Get-Acl -LiteralPath $p).Access|Where-Object{"
+            "$p=$env:KISEKI_DA_ACL_PATH;$bad=@((Get-Acl -LiteralPath $p).Access|Where-Object{"
             "try{$s=$_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value}"
             "catch{$s=$_.IdentityReference.Value};"
             "$b=$s -in @('S-1-1-0','S-1-5-11','S-1-5-32-545');"
@@ -71,8 +71,9 @@ def _validate_platform_home(home: Path) -> None:
             "});if($bad.Count){exit 42}else{'PRIVATE'}"
         )
         checked = subprocess.run(
-            [powershell, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script, str(probe)],
+            [powershell, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script],
             capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
+            env={**os.environ, "KISEKI_DA_ACL_PATH": str(probe)},
         )
         if checked.returncode != 0 or "PRIVATE" not in checked.stdout:
             raise InstallerError(
@@ -142,7 +143,7 @@ def preflight_source(source: Path, hosts: list[str]) -> dict[str, Any]:
     if not (plugin_root / "scripts" / "hook_entry.py").is_file():
         raise InstallerError("plugin hook launcherがありません。")
     for host, root in (("claude-code", claude_root), ("codex", plugin_root)):
-        _validate_installed_plugin(root, host, version)
+        _validate_installed_plugin(root, host, version, runtime_root=plugin_root if host == "claude-code" else None)
     codex_entry = next((row for row in documents["codex"].get("plugins", [])
                         if isinstance(row, dict) and row.get("name") == PLUGIN_ID), {})
     if (claude_entry.get("source") != "./plugins/claude-code/kiseki-da"
@@ -234,10 +235,26 @@ def _run_model_preview(source: Path, persona: dict[str, Any], hosts: list[str]) 
             pass
 
 
+def _materialize_claude_runtime(destination: Path) -> None:
+    # Windows checkouts may materialize the Claude aliases as old directories.
+    # Build both host packages from the canonical runtime in this new staging tree.
+    canonical = destination / "plugins/kiseki-da"
+    claude = destination / "plugins/claude-code/kiseki-da"
+    for name in ("core", "scripts", "evals", "state.example", "LICENSE"):
+        target = claude / name
+        target.absolute().relative_to(destination.resolve())
+        remove_path(target)
+        if (canonical / name).is_dir():
+            copytree_filtered(canonical / name, target)
+        else:
+            shutil.copy2(canonical / name, target)
+
+
 def _runtime_source(source: Path, destination: Path) -> None:
     destination.mkdir(parents=True)
     copytree_filtered(source / "installer", destination / "installer")
     copytree_filtered(source / "plugins", destination / "plugins")
+    _materialize_claude_runtime(destination)
     for metadata_dir in (".claude-plugin", ".agents"):
         candidate = source / metadata_dir
         if candidate.is_dir():
@@ -259,6 +276,55 @@ def _cmd_quote(value: str) -> str:
     return subprocess.list2cmdline([value])
 
 
+_CMD_ENV_PREFIXES = ("LOCALAPPDATA", "APPDATA", "USERPROFILE", "PROGRAMFILES",
+                     "PROGRAMFILES(X86)", "SYSTEMROOT")
+
+
+def _short_path(path: Path) -> str | None:
+    """8.3 name of an existing path; None when unavailable."""
+    if os.name != "nt":
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        function = ctypes.windll.kernel32.GetShortPathNameW
+        function.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.DWORD]
+        function.restype = wintypes.DWORD
+        buffer = ctypes.create_unicode_buffer(32768)
+        if function(str(path), buffer, len(buffer)) == 0:
+            return None
+        return buffer.value or None
+    except (OSError, AttributeError, ValueError):
+        return None
+
+
+def _cmd_path(path: Path) -> str:
+    """cmd.exe decodes batch files with the console codepage, so keep launcher text ASCII.
+
+    A non-ASCII profile name would otherwise be mojibake at run time and the
+    launcher would fail with "the system cannot find the path specified".
+    """
+    text = str(path)
+    if text.isascii():
+        return _cmd_quote(text)
+    for name in _CMD_ENV_PREFIXES:
+        base = os.environ.get(name)
+        if not base:
+            continue
+        try:
+            relative = path.relative_to(Path(base).resolve(strict=False))
+        except (ValueError, OSError):
+            continue
+        candidate = "%" + name + "%" + os.sep + str(relative)
+        if candidate.isascii():
+            return _cmd_quote(candidate)
+    short = _short_path(path)
+    if short and short.isascii():
+        return _cmd_quote(short)
+    return _cmd_quote(text)
+
+
 def _user_scripts_dir() -> Path:
     override = os.environ.get("KISEKI_DA_SCRIPTS_DIR")
     if override:
@@ -277,7 +343,7 @@ def _write_launchers(tx: Transaction, home: Path, runtime: Path, previous: dict[
     shell = shell.replace("__PYTHON__", _sh_quote(str(py))).replace("__BOOTSTRAP__", _sh_quote(str(bootstrap)))
     tx.write_text(target_dir / "kiseki-da", shell, mode=0o755)
     cmd = (assets / "kiseki-da.cmd.tmpl").read_text(encoding="utf-8")
-    cmd = cmd.replace("__PYTHON__", _cmd_quote(str(py))).replace("__BOOTSTRAP__", _cmd_quote(str(bootstrap)))
+    cmd = cmd.replace("__PYTHON__", _cmd_path(py)).replace("__BOOTSTRAP__", _cmd_path(bootstrap))
     tx.write_text(target_dir / "kiseki-da.cmd", cmd)
     local_paths = [bootstrap, target_dir / "kiseki-da", target_dir / "kiseki-da.cmd"]
     public_name = "kiseki-da.cmd" if os.name == "nt" else "kiseki-da"
@@ -303,11 +369,12 @@ def _location_pointer_plan(home: Path, previous: dict[str, Any]) -> dict[str, An
     expected = hashlib.sha256(text.encode("utf-8")).hexdigest()
     current = path.read_bytes() if path.is_file() else None
     current_hash = hashlib.sha256(current).hexdigest() if current is not None else None
+    same_location = current in (text.encode("utf-8"), text.replace("\n", "\r\n").encode("utf-8"))
     old = previous.get("location_pointer")
     old_owned = (isinstance(old, dict) and old.get("owned") is True
                  and Path(str(old.get("path", ""))).resolve(strict=False) == path
                  and old.get("sha256") == current_hash)
-    if current is not None and current != text.encode("utf-8") and not old_owned:
+    if current is not None and not same_location and not old_owned:
         raise InstallerError(f"既存のKISEKI_DA_HOME pointerを上書きしません: {path}")
     # An identical pre-existing pointer is useful but remains user-owned.  We
     # therefore never delete it on uninstall unless an earlier transaction
@@ -315,9 +382,9 @@ def _location_pointer_plan(home: Path, previous: dict[str, Any]) -> dict[str, An
     owned = bool(old_owned or current is None)
     return {
         "path": str(path),
-        "sha256": expected,
+        "sha256": current_hash if same_location else expected,
         "owned": owned,
-        "write": current is None or current != text.encode("utf-8"),
+        "write": not same_location,
         "text": text,
     }
 
@@ -506,6 +573,15 @@ def _import_legacy(tx: Transaction, source: Path, destination: Path) -> None:
             shutil.copy2(src, dst)
 
 
+def _restart_cache_family(host: str, installed_path: str, *, allow_missing: bool = False) -> Path:
+    host_home = host_security_mod.config_path(host).parent
+    family = host_home / "plugins/cache" / MARKETPLACE_ID / PLUGIN_ID
+    current = Path(installed_path).resolve()
+    if not current.is_relative_to(family.resolve()) or (not current.is_dir() and not allow_missing):
+        raise InstallerError(f"{host}の更新対象cacheを確認できません: {current}")
+    return family
+
+
 def _manager_steps(
     tx: Transaction,
     manager: HostManager,
@@ -516,12 +592,26 @@ def _manager_steps(
     inventory,
     ownership: dict[str, Any],
     source: Path,
+    restart_update: bool = False,
+    local_source: bool = False,
+    enable_plugin: bool = False,
 ) -> dict[str, Any]:
     result_ownership = dict(ownership)
     live_update = bool(replacing and inventory.plugin and ownership["plugin"])
-    if live_update and not inventory.plugin_enabled:
+    if live_update and not inventory.plugin_enabled and not (restart_update and enable_plugin):
         raise InstallerError(f"{manager.host} pluginは無効です。hostで有効化してから更新してください。")
-    if live_update and manager.host == "codex":
+    if live_update and restart_update:
+        # The native manager owns replacement/pruning. Back up only this plugin's
+        # cache family and the manager's registries, not other plugins' caches.
+        host_home = host_security_mod.config_path(manager.host).parent
+        cache_family = _restart_cache_family(manager.host, str(ownership.get("installed_path", "")),
+                                              allow_missing=enable_plugin and not inventory.plugin_enabled)
+        tx.track_external_mutable(cache_family)
+        if manager.host == "claude-code":
+            for name in ("installed_plugins.json", "known_marketplaces.json"):
+                tx.track_external_mutable(host_home / "plugins" / name)
+        tx.on_rollback(manager.plugin_add()[0])
+    if live_update and manager.host == "codex" and not restart_update:
         # Native `plugin add` also prunes old caches. Never run it in the live home.
         codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser().resolve()
         destination = codex_home / "plugins" / "cache" / MARKETPLACE_ID / PLUGIN_ID / new_version
@@ -541,7 +631,7 @@ def _manager_steps(
                 tx.retain_external_tree(cached, destination)
             select_cache(destination, retained)
             result_ownership["installed_path"] = str(destination)
-    if live_update and manager.host == "claude-code":
+    if live_update and manager.host == "claude-code" and not restart_update:
         # Marketplace removal unregisters Claude plugins but retains their caches.
         # On rollback restore the source before registering the old plugin again.
         tx.on_rollback(manager.plugin_add()[0])
@@ -549,10 +639,16 @@ def _manager_steps(
         if inventory.marketplace and ownership["marketplace"]:
             do, undo = manager.marketplace_remove(old_version=old_version)
             undo = manager.marketplace_restore(inventory.marketplace_fingerprint)
+            if restart_update:
+                # The developer checkout may now contain a newer version. Use
+                # the unchanged old runtime to reinstall the old plugin first;
+                # transaction restore then reinstates the original host config.
+                undo = manager.marketplace_add(version=old_version,
+                                               local_source=tx.home / "runtime" / old_version)[0]
             tx.external(do, undo, manager.run)
         inventory = manager.inventory()
     if not inventory.marketplace:
-        do, undo = manager.marketplace_add(version=new_version)
+        do, undo = manager.marketplace_add(version=new_version, local_source=source if local_source else None)
         tx.external(do, undo, manager.run)
     if inventory.plugin and not inventory.plugin_enabled and not replacing:
         if not ownership["plugin"]:
@@ -562,7 +658,7 @@ def _manager_steps(
         inventory = manager.inventory()
     if live_update and manager.host == "claude-code":
         tx.external(manager.plugin_add()[0], None, manager.run)
-    elif not live_update and (not inventory.plugin or not inventory.plugin_enabled or replacing):
+    elif (not live_update or restart_update) and (not inventory.plugin or not inventory.plugin_enabled or replacing):
         do, undo = manager.plugin_add()
         installed = tx.external(do, undo, manager.run)
         installed_path = _manager_installed_path(installed)
@@ -607,7 +703,7 @@ def _manager_installed_path(result: subprocess.CompletedProcess[str]) -> str | N
     return None
 
 
-def _validate_installed_plugin(path: Path, host: str, version: str) -> None:
+def _validate_installed_plugin(path: Path, host: str, version: str, *, runtime_root: Path | None = None) -> None:
     manifest_name = ".codex-plugin" if host == "codex" else ".claude-plugin"
     manifest = path / manifest_name / "plugin.json"
     try:
@@ -618,7 +714,7 @@ def _validate_installed_plugin(path: Path, host: str, version: str) -> None:
         raise InstallerError(f"{host} installed plugin versionが不一致です: {manifest}")
     if not (path / "scripts" / "hook_entry.py").is_file():
         raise InstallerError(f"{host} installed plugin hook launcherがありません: {path}")
-    if not (path / "core" / "ctx" / "cli.py").is_file():
+    if not ((runtime_root or path) / "core" / "ctx" / "cli.py").is_file():
         raise InstallerError(f"{host} installed plugin runtimeがありません: {path}")
     foreign_manifest = ".claude-plugin" if host == "codex" else ".codex-plugin"
     if (path / foreign_manifest / "plugin.json").exists():
@@ -836,6 +932,13 @@ def _smoke_installed_plugins(host_ownership: dict[str, dict[str, Any]], version:
                     raise InstallerError(f"{host} installed hook smokeに{event_type}記録がありません。")
 
 
+def _check_live_update_platform(hosts, inventories, ownership, *, replacing, dry_run, restart_update=False):
+    if (not dry_run and not restart_update and os.name == "nt" and replacing and "codex" in hosts
+            and inventories["codex"].plugin and ownership["codex"]["plugin"]):
+        raise InstallerError("WindowsのCodex稼働中更新は未対応です。状態は変更していません。"
+                             "保守手順 docs/MAINTENANCE.md を確認してください。")
+
+
 def install(
     *,
     hosts: list[str],
@@ -849,6 +952,9 @@ def install(
     host_security: str = "preserve",
     import_legacy: bool = False,
     allow_host_probes: bool = False,
+    restart_update: bool = False,
+    local_source: bool = False,
+    enable_plugin: bool = False,
 ) -> tuple[int, dict[str, Any]]:
     home = kiseki_home()
     _validate_platform_home(home)
@@ -858,6 +964,8 @@ def install(
     if host_security not in {"preserve", "recommended"}:
         raise InstallerError("host securityはpreserveまたはrecommendedです。")
     old = _metadata(home)
+    if enable_plugin and not restart_update:
+        raise InstallerError("--enable-pluginは--restart-updateと組み合わせてください。")
     if scope == "project" and project is not None:
         project = project.expanduser().resolve()
         if not project.is_dir():
@@ -876,6 +984,10 @@ def install(
         raise InstallerError("KISEKI_DA_HOMEに既存状態があるため旧状態を自動統合できません。")
     old_version = str(old.get("version")) if old.get("version") else None
     new_version = source_info["version"]
+    if restart_update and (not update_mode or not old_version or old_version == new_version):
+        raise InstallerError("--restart-updateには導入済み環境と異なるversionのソースが必要です。")
+    if restart_update and not (home / "runtime" / old_version / "install.py").is_file():
+        raise InstallerError("復元用の旧runtimeがありません。更新前に復旧してください。")
     replacing = bool(update_mode or (old_version and old_version != new_version))
     previous_hosts = [h for h in old.get("hosts", []) if h in HOSTS]
     location_pointer = _location_pointer_plan(home, old)
@@ -894,10 +1006,15 @@ def install(
         "setup_answers": {key: answers[key] for key in ("identity", "persona") if key in answers},
         "model_preview": model_preview,
         "security_settings": host_security,
+        "restart_required": restart_update,
+        "enable_plugin": enable_plugin,
+        "local_source": local_source,
         "security_changes": host_security_mod.preview(hosts) if host_security == "recommended" else [],
         "limitations": (["Codex Appのproject scopeは公開betaではLocal環境限定です。管理Worktree/Cloudではactivateしません。"]
                         if scope == "project" and "codex" in hosts else []),
     }
+    if restart_update:
+        base_plan["limitations"].append("native managerがcacheを入れ替えます。適用後は両ホストで新規セッションを開始してください。")
     if dry_run and not allow_host_probes:
         return 0, {
             **base_plan,
@@ -913,6 +1030,13 @@ def install(
         host: _host_ownership(old, previous_hosts, host, initial_inventories[host], new_version)
         for host in hosts
     }
+    if not (restart_update and enable_plugin):
+        for host in hosts:
+            if replacing and initial_inventories[host].plugin and not initial_inventories[host].plugin_enabled:
+                raise InstallerError(f"{host} pluginは無効です。再有効化する場合は--restart-update --enable-pluginを指定してください。")
+    # Reject unsupported exchange before creating a mutation transaction.
+    _check_live_update_platform(hosts, initial_inventories, selected_ownership,
+                                replacing=replacing, dry_run=dry_run, restart_update=restart_update)
     prior_security_records = dict(old.get("security_records", {})) if isinstance(old.get("security_records"), dict) else {}
     security_refresh_hosts = [host for host in hosts
                               if replacing and host in previous_hosts and host in prior_security_records]
@@ -924,7 +1048,8 @@ def install(
         "plugin_inventory": {host: _inventory_summary(initial_inventories[host]) for host in hosts},
         "host_ownership": selected_ownership,
         "host_actions": {
-            host: _install_action_plan(initial_inventories[host], selected_ownership[host], replacing)
+            host: (["対象pluginのcacheと登録情報をバックアップし、native managerで更新"] if restart_update
+                   else _install_action_plan(initial_inventories[host], selected_ownership[host], replacing))
             for host in hosts
         },
     }
@@ -995,6 +1120,9 @@ def install(
                 inventory=initial_inventories[host],
                 ownership=selected_ownership[host],
                 source=runtime,
+                restart_update=restart_update,
+                local_source=local_source,
+                enable_plugin=enable_plugin,
             )
         _smoke_installed_plugins(selected_ownership, new_version)
         # Native managers may update their settings files.  Apply the optional
@@ -1030,6 +1158,8 @@ def install(
             "updated_at": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
             "legacy_detected": plan["legacy_detected"],
             "launchers": launcher_records,
+            "management_launchers": [{"path": str(path.resolve()), "sha256": sha256_file(path)}
+                                     for path in launchers],
             "location_pointer": pointer_record,
             "host_ownership": host_ownership,
         }
@@ -1466,6 +1596,8 @@ def runtime_dispatch(argv: list[str]) -> int:
 
 def describe_plan(data: dict[str, Any]) -> str:
     lines = [f"操作: {data.get('action')}", f"KISEKI_DA_HOME: {data.get('home')}"]
+    if data.get("enable_plugin"):
+        lines.append("無効なKiseki DA: 今回の更新で再有効化（ホストの信頼確認は維持）")
     if data.get("version"):
         lines.append(f"version: {data['version']}")
     if data.get("hosts") is not None:

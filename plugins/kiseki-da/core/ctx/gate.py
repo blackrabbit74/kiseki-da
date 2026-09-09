@@ -18,7 +18,7 @@ from core.ctx.store import Store, UserError
 # (A-5 / A-8: reads are denied, R3 words are asked). Writes such as `echo ... >> .env` are not matched.
 _READERS = (
     r"cat|less|more|head|tail|bat|batcat|vi|vim|nvim|nano|emacs|code|open|strings|xxd|hexdump|od|"
-    r"base64|grep|egrep|fgrep|rg|ag|awk|sed|cp|scp|rsync|source|type|gc|Get-Content"
+    r"base64|grep|egrep|fgrep|rg|ag|awk|sed|cp|scp|rsync|source|type|gc|Get-Content|Select-String|sls"
 )
 
 # A Windows-style path prefix before a `\`-separated component: C: , ~ , . , .. , $VAR , ${VAR} , $env:VAR , %VAR%.
@@ -64,9 +64,9 @@ ASK_PATTERNS: list[tuple[str, str]] = [    # R3: whole words, case-insensitive
 ]
 PATH_KEYS = ("file_path", "notebook_path", "path", "file_paths")
 
-_SHELL_TOOLS = frozenset({"Bash", "PowerShell"})
-_WRITE_TOOLS = frozenset({"Write", "Edit", "NotebookEdit", "Delete"})
-_BLOCKING_RISKS = frozenset({"R1", "R2", "R3"})
+_SHELL_TOOLS = E.SHELL_TOOLS
+_WRITE_TOOLS = E.WRITE_TOOLS
+_BLOCKING_RISKS = frozenset({"R2", "R3"})
 _DENY_RE = [(re.compile(p), reason) for p, reason in DENY_PATTERNS]
 _ASK_RE = [(re.compile(p), reason) for p, reason in ASK_PATTERNS]
 
@@ -94,29 +94,81 @@ def _resolve(raw: str, cwd: str) -> Path | None:
         return None
 
 
+def _read_targets(args: list[str]) -> str:
+    """Exclude search patterns from the secret-path check, keeping input files."""
+    head = Path(args[0]).name.lower()
+    search = head in {"rg", "grep", "egrep", "fgrep", "select-string", "sls"}
+    pattern_seen = not search
+    targets = []
+    i = 1
+    while i < len(args):
+        arg = args[i]
+        if search and arg.lower() in {"-path", "-literalpath"}:
+            targets.extend(args[i + 1:i + 2])
+            i += 2
+            continue
+        if search and arg in {"-g", "--glob", "--iglob", "-t", "--type", "-T", "--type-not",
+                              "--encoding", "--max-count", "-m", "-A", "-B", "-C"}:
+            i += 2
+            continue
+        if search and arg.lower() in {"-e", "--regexp", "-pattern"}:
+            pattern_seen = True
+            i += 2
+            continue
+        if search and (arg.startswith("--regexp=") or arg.startswith("-e") and len(arg) > 2):
+            pattern_seen = True
+        elif search and arg in {"-f", "--file"}:
+            pattern_seen = True
+            targets.extend(args[i + 1:i + 2])
+            i += 1
+        elif not arg.startswith("-"):
+            if not pattern_seen:
+                pattern_seen = True
+            else:
+                targets.append(arg)
+        i += 1
+    return args[0] + " " + " ".join('"' + item + '"' for item in targets)
+
+
 def guard(tool: str, tool_input: dict, cwd: str) -> tuple[Literal["allow", "ask", "deny"], str]:
     """§6.2 rules (1)-(3). pa_home() and REPO_ROOT / "core" are evaluated on every call."""
     tool = tool or ""
     if not isinstance(tool_input, dict):
         tool_input = {}
-    if tool in _SHELL_TOOLS:
-        raw = tool_input.get("command", "")
-        command = raw if isinstance(raw, str) else ("" if raw is None else str(raw))
-        if E.ctx_command(command) == "hook":
+    if tool.lower() in _SHELL_TOOLS:
+        command = E.shell_command(tool_input)
+        if E.ctx_command(command, cwd) == "hook" or E.ctx_command(command, cwd, trusted=False) == "hook":
             return "deny", "hook はホスト専用の入口です。利用者発言やツール証拠をモデルから作成しないでください"
+        args = E.simple_words(command)
+        script = E.python_script(args, cwd, trusted=False)
+        if script is not None and _resolve(args[script], cwd) == (_store.REPO_ROOT / "scripts/hook_entry.py").resolve():
+            return "deny", "hook はホスト専用の入口です。利用者発言やツール証拠をモデルから作成しないでください"
+        if E.metadata_command(command, cwd):
+            return "allow", ""
+        if args and E.effect(tool, tool_input, cwd) == "read":
+            request = _read_targets(args)
+            if _DENY_RE[-1][0].search(request):
+                return "deny", _DENY_RE[-1][1]
+            if Path(args[0]).name.lower() not in {"rg", "grep", "egrep", "fgrep", "select-string", "sls"} and _ASK_RE[-1][0].search(request):
+                return "ask", _ASK_RE[-1][1]
+            return "allow", ""
+        if args and Path(args[0]).name.lower() in {"echo", "write-output", "write-host"}:
+            return "allow", ""  # a literal explanation has no external action
+        if args[:2] in (["git", "commit"], ["git", "checkout"], ["git", "switch"]):
+            return "allow", ""  # local metadata/messages are not production operations
+        normalized = command.replace("\\", "/")
+        wrapper = (_store.REPO_ROOT / "scripts/hook_entry.py").as_posix()
+        cli = (_store.REPO_ROOT / "core/ctx/cli.py").as_posix()
+        if wrapper in normalized or (cli in normalized and re.search(r"\bhook\s+(?:user-input|pre-tool|post-tool|session-start|session-end|stop)\b", normalized)):
+            return "deny", "hook はホスト専用の入口です。複合コマンドからも呼び出せません"
         for rx, reason in _DENY_RE:
             if rx.search(command):
                 return "deny", reason
-        args = E.words(command)
-        if args and args[0] in {"rg", "grep", "egrep", "fgrep"} and E.effect(tool, tool_input) == "read":
-            return "allow", ""  # a search for 'deploy' is not a deployment
-        if E.is_ctx(command):
-            return "allow", ""  # quoted task text does not itself perform the quoted operation
         for rx, reason in _ASK_RE:
             if rx.search(command):
                 return "ask", reason
         return "allow", ""
-    if tool in _WRITE_TOOLS or "file_paths" in tool_input:
+    if tool.lower() in _WRITE_TOOLS or "file_paths" in tool_input:
         home = _store.kiseki_da_home() if hasattr(_store, "kiseki_da_home") else _store.pa_home()
         core = (_store.REPO_ROOT / "core").resolve()
         for raw in _collect_paths(tool_input):
@@ -127,7 +179,7 @@ def guard(tool: str, tool_input: dict, cwd: str) -> tuple[Literal["allow", "ask"
                 return "deny", f"$KISEKI_DA_HOME（{home}）配下への書込は禁止です: {raw}"
             if path.is_relative_to(core):
                 return "deny", f"Kiseki DA の core/（{core}）配下への書込は禁止です: {raw}"
-        if tool == "Delete":
+        if tool.lower() == "delete":
             return "ask", "削除の対象を確認し、現在の利用者指示があれば今回の操作として記録してください"
         return "allow", ""
     if tool.lower().startswith("mcp"):
@@ -146,7 +198,9 @@ def stop_gate(store: Store, sid: str, stop_hook_active: bool = False) -> tuple[b
         return False, ""
     referenced: dict[str, None] = {}   # cards touched in this session, in first-seen order
     already: set[str] = set()          # cards already blocked once in this session
+    advised: set[str] = set()
     for ev in store.iter_events(types={"task_open", "task_update", "gate"}, sid=sid):
+        advised.update(ev.get("advisory_tasks", []))
         task = ev.get("task")
         if not isinstance(task, str) or not task:
             continue
@@ -156,6 +210,7 @@ def stop_gate(store: Store, sid: str, stop_hook_active: bool = False) -> tuple[b
         else:
             referenced[task] = None
     open_cards: list[taskcard.TaskCard] = []
+    advisory: list[str] = []
     for task in referenced:
         if task in already:
             continue
@@ -165,6 +220,8 @@ def stop_gate(store: Store, sid: str, stop_hook_active: bool = False) -> tuple[b
             continue   # card file removed or unreadable
         if card.status == "open" and card.risk in _BLOCKING_RISKS:
             open_cards.append(card)
+        elif card.status == "open" and card.risk == "R1" and task not in advised:
+            advisory.append(task)
     if open_cards:
         card = max(open_cards, key=lambda c: (c.updated, c.id))   # A-7: newest `updated` first
         reason = (f"open な {card.risk} カード {card.id} があります。閉じるか保留してください: "
@@ -172,5 +229,8 @@ def stop_gate(store: Store, sid: str, stop_hook_active: bool = False) -> tuple[b
                   f"kiseki-da task defer {card.id} --reason <未検証の理由> --sid {sid}")
         store.append_event({"type": "gate", "task": card.id, "blocked": True, "reason": reason})
         return True, reason
-    store.append_event({"type": "gate", "task": None, "blocked": False, "reason": ""})
-    return False, ""
+    reason = ("未完了のR1カード: " + ", ".join(advisory)
+              + "。完了証拠を確認してclose、または未検証理由を付けてdeferしてください。応答は停止しません。") if advisory else ""
+    store.append_event({"type": "gate", "task": None, "blocked": False, "reason": reason,
+                        "advisory_tasks": advisory})
+    return False, reason

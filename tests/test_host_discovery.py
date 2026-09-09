@@ -34,7 +34,7 @@ class HostDiscoveryTests(unittest.TestCase):
         # The configured command must never be silently replaced, even if its path is absent.
         configured = '"/explicit path/codex" --config test=true'
         with mock.patch.dict(os.environ, {"KISEKI_DA_CODEX_COMMAND": configured}):
-            self.assertEqual(hosts._executable("codex"), shlex.split(configured, posix=os.name != "nt"))
+            self.assertEqual(hosts._executable("codex"), ["/explicit path/codex", "--config", "test=true"])
 
     def test_path_command_takes_precedence_over_app(self):
         with mock.patch.object(hosts.shutil, "which", return_value="/cli/bin/codex"):

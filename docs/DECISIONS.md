@@ -39,3 +39,17 @@
 - 根拠: 複数の実ディレクトリを残すと、source/refを戻してもCLIが新しいcacheを選ぶ。リンクは使用版候補に含まれず、既存のhook pathとしては解決できることを実CLIで確認した。
 - ClaudeのGit source変更: 宣言済みrefの上書きは拒否されるため、cacheを保持するmarketplace再登録とplugin installを使う。rollbackもsourceを戻してからpluginを登録する。
 - 検証: ローカルsourceと公開済みGitHubタグで、使用版・cache本体・更新中の継続読取・更新後の旧hook実行を確認する。非対応FSでは切替前のprobeで停止する。
+# 2026-09-09 個人利用のガード保守
+
+- 単一のliteralコマンドだけを読取・管理操作として分類する。PowerShellの呼出演算子と引用を扱い、複合構文はunknownに残す。正規launcherは導入時hashとruntime一致で識別する。別実行ファイルやhook入口を免除しない。
+- R1のStopは注意喚起と記録にし、R2・R3の停止および完了証拠の照合は維持する。通常利用の可逆な判断で確認を繰り返さない。
+- 必須制約は表示件数と切り離し、全openカードをID順で収集する。単なる更新順変更で取得済み内容のhashが変わらないようにする。
+- WindowsのClaude実体コピーが古くなるため、導入用stagingではcanonical runtimeから共有部分を再構成する。稼働中cacheは編集しない。
+- これらはshell全体の安全性を証明する仕組みではない。廃止条件は、ホストが構造化した実行内容・実行権限・読取効果を直接提供し、この推測が不要になった場合。保守手順はMAINTENANCE.mdに記載する。
+
+## Windowsの再開を前提とした更新
+
+- `--restart-update`では対象cache familyとnative登録情報をtransactionへ保存し、plugin managerで入れ替える。symlink privilegeやatomic exchangeを前提としない。旧セッションを継続させる保証はせず、新規セッションを要求する。
+- `--source`はmaterialize済みのversion付きruntimeをホストの供給元として使う。rollbackでは旧runtimeからpluginを再導入してから元のhost設定を復元し、編集済み開発checkoutを旧版だと誤認しない。
+- 無効なpluginは既定で保持する。利用者が再開を意図する場合の`--enable-plugin`だけ、native managerによる再有効化を許可する。hook trustは別のホスト判断として残す。
+- 廃止条件: Windowsで旧hook pathを保持するnative update/rollbackが両ホストから提供され、同じ復元試験で代替できたとき。

@@ -427,7 +427,7 @@ def check_evidence(store: Store, criterion: Criterion) -> str | None:
     cwd = str(ev.get("cwd") or ev.get("workspace") or "")
     if not cwd or not ev.get("request_hash") or not ev.get("tool_use_id"):
         return "unbound evidence"
-    if ev["request_hash"] != E.expected(criterion.check, cwd):
+    if not E.matches(ev, criterion.check, cwd):
         return "request mismatch"
     if ev.get("artifact") and E.changed(ev["artifact"]):
         return "artifact changed"
@@ -448,8 +448,7 @@ def missing_evidence(store: Store, card: TaskCard) -> list[tuple[Criterion, str]
         # A registered verification command (e.g. a project-specific Python checker) is not
         # itself an inferred edit. Unregistered unknown operations require re-verification.
         cwd = str(later.get("cwd") or card.workspace)
-        checks = {E.expected(c.check, cwd) for c in card.criteria}
-        return later.get("request_hash") not in (checks - {None})
+        return not any(E.matches(later, c.check, cwd) for c in card.criteria)
     for c in card.criteria:
         reason = check_evidence(store, c)
         if reason is None:

@@ -190,7 +190,7 @@ class LaunchFixes(unittest.TestCase):
         self.assertIn("意思決定", result.stdout)
 
     def test_fixed_entry_binds_the_selected_home(self):
-        command = shlex.split(build.command_prefix(self.st.home))
+        command = E.simple_words(build.command_prefix(self.st.home))
         env = dict(self.env, KISEKI_DA_HOME=str(self.root / "wrong-home"))
         payload = {"session_id": "generated", "hook_event_name": "SessionStart", "cwd": str(self.ws)}
         result = subprocess.run([*command, "hook", "session-start", "--env", "codex"],
@@ -203,13 +203,19 @@ class LaunchFixes(unittest.TestCase):
         command = [sys.executable, "-c", "print('verified')"]
         card = taskcard.new_card(self.st, "検証runnerの証拠", id="runner-proof")
         taskcard.add_criterion(self.st, card, "実行が成功する", shlex.join(command))
+        if os.name == "nt":
+            taskcard.add_criterion(self.st, card, "Windows表記も同じ実行を指す", subprocess.list2cmdline(command))
         result = self.cli("verify", "run", "--", *command)
         self.assertEqual(result.returncode, 0, result.stderr)
         taskcard.set_evidence(self.st, card, "C1", "last")
+        if os.name == "nt":
+            taskcard.set_evidence(self.st, card, "C2", "last")
         self.assertEqual(taskcard.close(self.st, card), [])
         event = list(self.st.iter_events(types={"tool_call"}))[-1]
         self.assertTrue(event["tool_use_id"].startswith("verify-"))
         self.assertEqual(event["workspace"], str(self.ws))
+        ordinary = {**event, "tool_use_id": "ordinary-call", "request_hash": "different"}
+        self.assertFalse(E.matches(ordinary, shlex.join(command), str(self.ws)))
 
     def test_case_memory_does_not_become_shared_memory(self):
         cid = self.st.append_candidate({"text": "この案件は敬体", "source": "user-stated"})
@@ -332,11 +338,127 @@ class LaunchFixes(unittest.TestCase):
     def test_model_cannot_call_the_hook_entrypoint_as_a_tool(self):
         command = f"python3 {store.REPO_ROOT}/core/ctx/cli.py hook user-input --env codex"
         self.assertEqual(gate.guard("Bash", {"command": command}, str(self.ws))[0], "deny")
+        self.assertEqual(gate.guard("PowerShell", {"command": "& " + command + "; echo done"}, str(self.ws))[0], "deny")
         ordinary = f'python3 {store.REPO_ROOT}/core/ctx/cli.py task new --goal hook'
         self.assertEqual(gate.guard("Bash", {"command": ordinary}, str(self.ws))[0], "allow")
 
     def test_searching_for_deploy_does_not_request_deployment_permission(self):
         self.assertEqual(gate.guard("Bash", {"command": "rg deploy docs"}, str(self.ws))[0], "allow")
+
+    def test_powershell_recovery_and_reads_with_unread_constraints(self):
+        self.card()
+        c = taskcard.load(self.st, "auth")
+        c.constraints.append("公開前に利用者指示を確認する")
+        taskcard.save(self.st, c, ["constraint"])
+        self.assertTrue(build.needs_context(self.st))
+        prefix = "& " + " ".join("'" + str(arg).replace("'", "''") + "'" for arg in
+                                  (sys.executable, "-B", store.REPO_ROOT / "core/ctx/cli.py"))
+        cases = [(prefix + " context required --sid launch-a", "metadata"),
+                 (prefix + " task defer auth --reason unverified --sid launch-a", "metadata"),
+                 ("Get-Content -LiteralPath README.md", "read"),
+                 ('rg -n "release|deploy" README.md', "read"),
+                 ("Select-String -Pattern 'rm -rf /|deploy' -Path README.md", "read")]
+        for command, effect in cases:
+            for host, tool, key in (("codex", "exec_command", "cmd"), ("claude-code", "Bash", "command")):
+                with self.subTest(command=command, host=host):
+                    out, _ = self.hook("pre-tool", "PreToolUse", env=host, tool_name=tool, tool_input={key: command})
+                    self.assertEqual(E.effect(tool, {key: command}, str(self.ws)), effect)
+                    self.assertEqual(out.decision, "allow", out.reason)
+        out, _ = self.hook("pre-tool", "PreToolUse", tool_name="PowerShell",
+                           tool_input={"command": "Set-Content result.txt changed"})
+        self.assertEqual(out.decision, "deny")
+        self.assertEqual(self.cli("context", "required").returncode, 0)
+        self.assertFalse(build.needs_context(self.st))
+        self.assertEqual(self.cli("task", "defer", "auth", "--reason", "実ホスト試験待ち").returncode, 0)
+        self.assertEqual(taskcard.load(self.st, "auth").status, "deferred")
+
+    def test_shell_composition_and_untrusted_programs_are_never_read_or_metadata(self):
+        prefix = shlex.join([sys.executable, str(store.REPO_ROOT / "core/ctx/cli.py")])
+        for command in ('Get-Content README.md | Set-Content copy.txt',
+                        'rg "release|deploy" README.md > result.txt',
+                        'Get-Content README.md; Remove-Item result.txt',
+                        'Get-Content README.md && echo done', 'Get-Content README.md\necho done',
+                        'Get-Content "$(Remove-Item x)"', 'Get-Content "`Remove-Item x`"',
+                        'Get-Content ${path}', 'Get-Content README.md &',
+                        'rg --pre python pattern README.md', 'git diff --output=changed.txt',
+                        'git diff --ext-diff',
+                        prefix + ' context required; echo changed',
+                        prefix + ' verify run -- python -c "print(1)"',
+                        'imposter "' + str(store.REPO_ROOT / 'core/ctx/cli.py') + '" context required',
+                        prefix + ' hook user-input --env codex', 'kiseki-da-imposter context required'):
+            with self.subTest(command=command):
+                self.assertNotIn(E.effect("PowerShell", {"command": command}, str(self.ws)), {"read", "metadata"})
+
+    def test_shell_operators_and_cmd_inputs_have_distinct_evidence(self):
+        cwd = str(self.ws)
+        self.assertNotEqual(E.identity("Bash", {"command": "cat a | cat b"}, cwd),
+                            E.identity("Bash", {"command": "cat a '|' cat b"}, cwd))
+        self.assertEqual(E.identity("exec_command", {"cmd": "rg pattern README.md"}, cwd),
+                         E.identity("Bash", {"command": "rg pattern README.md"}, cwd))
+
+    def test_managed_launcher_requires_runtime_and_both_saved_hashes(self):
+        import hashlib
+        home = self.st.home
+        runtime = home / "runtime/test"
+        selected = runtime / "plugins/kiseki-da/core/ctx"
+        selected.mkdir(parents=True)
+        for filename in ("cli.py", "evidence.py"):
+            (selected / filename).write_bytes((store.REPO_ROOT / "core/ctx" / filename).read_bytes())
+        bootstrap = home / "bin/kiseki-da.py"
+        bootstrap.parent.mkdir()
+        bootstrap.write_text("# fixture bootstrap")
+        launcher = home / "bin/kiseki-da.cmd"
+        launcher.write_text("@echo off\nfixture")
+        records = [{"path": str(p), "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
+                   for p in (bootstrap, launcher)]
+        (home / "current.json").write_text(json.dumps({"runtime": str(runtime)}))
+        (home / "install.json").write_text(json.dumps({"management_launchers": records}))
+        with patch.object(E.shutil, "which", return_value=str(launcher)):
+            self.assertEqual(E.effect("Bash", {"command": "kiseki-da context required"}), "metadata")
+            self.assertEqual(gate.guard("Bash", {"command": "kiseki-da hook user-input"}, str(self.ws))[0], "deny")
+            self.assertEqual(E.effect("Bash", {"command": "kiseki-da update --yes"}), "unknown")
+            bootstrap.write_text("# changed after installation")
+            self.assertEqual(E.effect("Bash", {"command": "kiseki-da context required"}), "unknown")
+
+    def test_search_text_is_not_an_operation_but_actual_operations_stay_guarded(self):
+        for command in ('rg -n "cat .env|rm -rf /|deploy" README.md',
+                        'Write-Output "release deploy delete"', 'git commit -m "release fix"',
+                        'git checkout production', 'Get-Content docs/deploy.md'):
+            self.assertEqual(gate.guard("PowerShell", {"command": command}, str(self.ws)), ("allow", ""), command)
+        for command in ('Get-Content .env', 'rg -n token .env', 'rg -f .env README.md',
+                        "Select-String -Path .env -Pattern token", "sls -Pattern token -LiteralPath .env",
+                        'Remove-Item C:\\ -Recurse -Force', 'git push -f origin main'):
+            self.assertEqual(gate.guard("exec_command", {"cmd": command}, str(self.ws))[0], "deny", command)
+        for command in ('vercel deploy --prod', 'npm publish', 'stripe payment create', 'psql -c "DROP TABLE x"'):
+            self.assertEqual(gate.guard("PowerShell", {"command": command}, str(self.ws))[0], "ask", command)
+
+    def test_r1_warns_once_without_claiming_completion_on_both_hosts(self):
+        c = self.card()
+        for host in ("codex", "claude-code"):
+            # Different session IDs exercise both host output contracts independently.
+            self.st.sid = "advisory-" + host
+            taskcard.save(self.st, c, ["note"])
+            out, hi = self.hook("stop", "Stop", env=host)
+            output = json.loads(hooks.format_output(hi, out)[0])
+            self.assertIn("systemMessage", output)
+            self.assertNotIn("decision", output)
+            self.assertIn("auth", output["systemMessage"])
+            self.assertEqual(taskcard.load(self.st, "auth").status, "open")
+            self.assertTrue(taskcard.missing_evidence(self.st, c))
+            second, hi = self.hook("stop", "Stop", env=host)
+            self.assertEqual(hooks.format_output(hi, second)[0], "")
+
+    def test_constraints_cover_all_cards_and_ignore_update_order(self):
+        for i in range(4):
+            c = taskcard.new_card(self.st, "条件", id=f"constraint-{i}")
+            c.constraints.append(f"条件{i}")
+            taskcard.save(self.st, c, ["constraint"])
+        before = build.required_context(self.st)
+        for i in range(4):
+            self.assertIn(f"条件{i}", before["text"])
+        c = taskcard.load(self.st, "constraint-0")
+        taskcard.save(self.st, c, ["note"])
+        self.assertEqual(build.required_context(self.st)["hash"], before["hash"])
 
     def test_metrics_do_not_call_an_unanswered_question_useful(self):
         card = self.card()

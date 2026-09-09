@@ -5,11 +5,21 @@ set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CTX=(python3 "$ROOT/plugins/kiseki-da/core/ctx/cli.py")
 FX="$ROOT/acceptance/fixtures"
-export KISEKI_DA_HOME="$(mktemp -d)"
-WS="$(mktemp -d)"            # 作業ディレクトリは KISEKI_DA_HOME の外（KISEKI_DA_HOME 配下の書込は deny されるため）
-TMP="$(mktemp -d)"
-trap 'rm -rf "$KISEKI_DA_HOME" "$WS" "$TMP"' EXIT
+SMOKE_TMP_BASE="$(cd "${TMPDIR:-/tmp}" && pwd)"
+export KISEKI_DA_HOME="$(mktemp -d "$SMOKE_TMP_BASE/kiseki-smoke.XXXXXX")"
+WS="$(mktemp -d "$SMOKE_TMP_BASE/kiseki-smoke.XXXXXX")"
+TMP="$(mktemp -d "$SMOKE_TMP_BASE/kiseki-smoke.XXXXXX")"
+cleanup() {
+  local target
+  for target in "$KISEKI_DA_HOME" "$WS" "$TMP"; do
+    case "$target" in "$SMOKE_TMP_BASE"/kiseki-smoke.*) [ -d "$target" ] && rm -rf -- "$target" ;; esac
+  done
+}
+trap cleanup EXIT
 FAIL=0
+FX_JSON="$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve().as_posix())' "$FX")"
+WS_JSON="$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve().as_posix())' "$WS")"
+NATIVE_OS="$(python3 -c 'import os; print(os.name)')"
 pass() { echo "PASS $1"; }
 fail() { echo "FAIL $1"; FAIL=1; }
 
@@ -17,14 +27,18 @@ fail() { echo "FAIL $1"; FAIL=1; }
 # fixtures の __FX__（fixtures ディレクトリ）と __CWD__（作業ディレクトリ）を置換してから渡す。
 hook() {
   local t0 t1
-  sed -e "s#__FX__#$FX#g" -e "s#__CWD__#$WS#g" "$2" > "$TMP/payload.json"
+  sed -e "s#__FX__#$FX_JSON#g" -e "s#__CWD__#$WS_JSON#g" "$2" > "$TMP/payload.json"
   t0=$(python3 -c 'import time;print(int(time.time()*1000))')
   "${CTX[@]}" hook "$1" --env claude-code < "$TMP/payload.json" > "$TMP/out" 2> "$TMP/err"
   HOOK_RC=$?
   t1=$(python3 -c 'import time;print(int(time.time()*1000))')
   HOOK_OUT="$(cat "$TMP/out")"
   HOOK_MS=$(( t1 - t0 ))
-  [ "$HOOK_MS" -lt 300 ] || fail "C10 hook $1 took ${HOOK_MS}ms (>= 300ms)"
+  if [ "$NATIVE_OS" = nt ]; then
+    echo "OBSERVE Windows hook $1 ${HOOK_MS}ms (POSIX 300ms budget is not a Windows performance claim)"
+  else
+    [ "$HOOK_MS" -lt 300 ] || fail "C10 hook $1 took ${HOOK_MS}ms (>= 300ms)"
+  fi
 }
 sid2() { sed 's/"s-demo-1"/"s-demo-2"/g' "$1" > "$TMP/sid2.json"; echo "$TMP/sid2.json"; }
 
@@ -40,7 +54,7 @@ grep -q '"type": *"context_manifest"' "$KISEKI_DA_HOME/events.jsonl" && pass "C1
 
 "${CTX[@]}" task new --goal "認証トークンの自動更新を追加する" --risk R1 --kind code --id demo-auth >/dev/null && pass "C2a task new" || fail "C2a task new"
 "${CTX[@]}" task set demo-auth --add-criterion "更新処理の単体テストが通る :: pytest tests/test_auth.py -q" >/dev/null || fail "C2b add C1"
-"${CTX[@]}" task set demo-auth --add-criterion "変更差分を読み返した :: Read $WS/repo/git-diff.txt" >/dev/null || fail "C2c add C2"
+"${CTX[@]}" task set demo-auth --add-criterion "変更差分を読み返した :: Read $WS_JSON/repo/git-diff.txt" >/dev/null || fail "C2c add C2"
 "${CTX[@]}" task close demo-auth > "$TMP/close1" 2>&1; RC=$?
 [ $RC -eq 1 ] && grep -q "C1" "$TMP/close1" && pass "C2d close refused without evidence (lists C1)" || fail "C2d close should be refused with a list, rc=$RC"
 
@@ -51,7 +65,8 @@ hook post-tool "$FX/cc-post-tool-read.json"
 "${CTX[@]}" task set demo-auth --evidence C2=last >/dev/null && pass "C3c evidence C2=last" || fail "C3c evidence C2"
 
 hook stop "$FX/cc-stop.json"
-echo "$HOOK_OUT" | grep -q '"decision": *"block"' && pass "C4a stop blocks once for open R1 card (${HOOK_MS}ms)" || fail "C4a stop should block: '$HOOK_OUT'"
+echo "$HOOK_OUT" | grep -q '"systemMessage"' && pass "C4a stop warns once for open R1 card (${HOOK_MS}ms)" || fail "C4a stop should warn: '$HOOK_OUT'"
+echo "$HOOK_OUT" | grep -q '"decision": *"block"' && fail "C4a R1 must not block"
 hook stop "$FX/cc-stop.json"
 [ -z "$HOOK_OUT" ] && pass "C4b second stop emits nothing" || fail "C4b second stop emitted: '$HOOK_OUT'"
 

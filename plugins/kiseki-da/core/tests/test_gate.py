@@ -166,7 +166,7 @@ class GuardTestCase(unittest.TestCase):
     # ------------------------------------------------------------ ask variants (R3)
     def test_ask_variants(self):
         for cmd in ('psql -c "DELETE FROM x"', "npm publish", "stripe payment create", "cat secrets.yaml",
-                    "Deploy now", "git checkout production"):
+                    "Deploy now"):
             self.assert_decision("ask", cmd)
 
     def test_ask_reason_mentions_r3_and_confirmation(self):
@@ -252,11 +252,11 @@ class StopGateTestCase(unittest.TestCase):
         return list(self.st.iter_events(types={"gate"}, sid=sid))
 
     def test_blocks_once_per_card(self):
-        card = taskcard.new_card(self.st, "認証トークンの自動更新", risk="R1", id="demo-auth")
+        card = taskcard.new_card(self.st, "認証トークンの自動更新", risk="R2", id="demo-auth")
         blocked, reason = gate.stop_gate(self.st, "s-1")
         self.assertTrue(blocked)
         self.assertIn("demo-auth", reason)
-        self.assertIn("R1", reason)
+        self.assertIn("R2", reason)
         self.assertIn("kiseki-da task close demo-auth", reason)
         self.assertIn("kiseki-da task defer demo-auth", reason)
         evs = self.gate_events()
@@ -287,7 +287,7 @@ class StopGateTestCase(unittest.TestCase):
         self.assertIn("R3 カード r3", reason)
 
     def test_done_card_does_not_block(self):
-        card = taskcard.new_card(self.st, "x", risk="R1", id="done-card")
+        card = taskcard.new_card(self.st, "x", risk="R2", id="done-card")
         card.status = "done"
         taskcard.save(self.st, card, ["status:done"])
         self.assertEqual(gate.stop_gate(self.st, "s-1"), (False, ""))
@@ -300,7 +300,7 @@ class StopGateTestCase(unittest.TestCase):
         self.assertEqual(gate.stop_gate(self.st, "s-1"), (False, ""))
 
     def test_stop_hook_active(self):
-        taskcard.new_card(self.st, "x", risk="R1", id="active")
+        taskcard.new_card(self.st, "x", risk="R2", id="active")
         self.assertEqual(gate.stop_gate(self.st, "s-1", stop_hook_active=True), (False, ""))
         evs = self.gate_events()
         self.assertEqual(len(evs), 1)
@@ -311,14 +311,14 @@ class StopGateTestCase(unittest.TestCase):
         self.assertTrue(gate.stop_gate(self.st, "s-1")[0])
 
     def test_exactly_one_gate_event_per_call(self):
-        taskcard.new_card(self.st, "a", risk="R1", id="a")
-        taskcard.new_card(self.st, "b", risk="R1", id="b")
+        taskcard.new_card(self.st, "a", risk="R2", id="a")
+        taskcard.new_card(self.st, "b", risk="R2", id="b")
         for i in range(1, 5):
             gate.stop_gate(self.st, "s-1")
             self.assertEqual(len(self.gate_events()), i)
 
     def test_newest_updated_card_first_then_the_rest(self):
-        older = taskcard.new_card(self.st, "older", risk="R1", id="older")
+        older = taskcard.new_card(self.st, "older", risk="R2", id="older")
         newer = taskcard.new_card(self.st, "newer", risk="R2", id="newer")
         older.updated = "2026-09-01T10:00:00+09:00"
         newer.updated = "2026-09-03T10:00:00+09:00"
@@ -335,23 +335,23 @@ class StopGateTestCase(unittest.TestCase):
 
     def test_card_from_another_session_is_ignored(self):
         other = Store(home=self.home, sid="s-2")
-        taskcard.new_card(other, "x", risk="R1", id="elsewhere")
+        taskcard.new_card(other, "x", risk="R2", id="elsewhere")
         self.assertEqual(gate.stop_gate(self.st, "s-1"), (False, ""))
         # ... but a block recorded in another session does not count for this one
-        taskcard.new_card(self.st, "y", risk="R1", id="here")
+        taskcard.new_card(self.st, "y", risk="R2", id="here")
         other.append_event({"type": "gate", "task": "here", "blocked": True, "reason": "x"})
         self.assertTrue(gate.stop_gate(self.st, "s-1")[0])
 
     def test_card_updated_in_this_session_counts(self):
         other = Store(home=self.home, sid="s-2")
-        card = taskcard.new_card(other, "x", risk="R1", id="shared")
+        card = taskcard.new_card(other, "x", risk="R2", id="shared")
         taskcard.save(self.st, card, ["note"])   # task_update with sid s-1
         blocked, reason = gate.stop_gate(self.st, "s-1")
         self.assertTrue(blocked)
         self.assertIn("shared", reason)
 
     def test_missing_card_file_is_skipped(self):
-        taskcard.new_card(self.st, "x", risk="R1", id="gone")
+        taskcard.new_card(self.st, "x", risk="R2", id="gone")
         self.st.task_path("gone").unlink()
         self.assertEqual(gate.stop_gate(self.st, "s-1"), (False, ""))
         self.assertEqual(len(self.gate_events()), 1)

@@ -80,6 +80,7 @@ class _Parser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
         want_help = kwargs.pop("add_help", True)
         kwargs.setdefault("formatter_class", _Formatter)
+        kwargs.setdefault("allow_abbrev", False)
         super().__init__(*args, add_help=False, **kwargs)
         self._positionals.title = "引数"
         self._optionals.title = "オプション"
@@ -601,6 +602,7 @@ def cmd_verify_run(args) -> int:
         "tool_use_id": "verify-" + uuid.uuid4().hex,
         "workspace": store.workspace(), "cwd": str(Path.cwd()),
         "request_hash": E.identity("Bash", {"command": display}, str(Path.cwd())),
+        "argv_request_hash": E.identity("Bash", {"command": shlex.join(command)}, str(Path.cwd())),
         "effect": E.effect("Bash", {"command": display}),
         "type": "tool_call",
         "tool": "Bash",

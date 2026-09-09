@@ -15,6 +15,27 @@ CLAUDE_PLUGIN = ROOT / "plugins" / "claude-code" / "kiseki-da"
 
 
 class PluginPackageTest(unittest.TestCase):
+    def test_staged_claude_runtime_is_rebuilt_from_canonical_source(self):
+        from installer.operations import _runtime_source
+        import shutil
+        with tempfile.TemporaryDirectory() as raw:
+            base = Path(raw)
+            source = base / "source"
+            source.mkdir()
+            for name in ("plugins", "installer"):
+                shutil.copytree(ROOT / name, source / name, ignore=shutil.ignore_patterns("__pycache__"))
+            for name in ("install.py", "VERSION"):
+                shutil.copy2(ROOT / name, source / name)
+            from installer.operations import _materialize_claude_runtime
+            _materialize_claude_runtime(source)
+            stale = source / "plugins/claude-code/kiseki-da/core/ctx/evidence.py"
+            stale.write_text("# stale Windows copy", encoding="utf-8")
+            staged = base / "staged"
+            _runtime_source(source, staged)
+            self.assertEqual((staged / "plugins/claude-code/kiseki-da/core/ctx/evidence.py").read_bytes(),
+                             (source / "plugins/kiseki-da/core/ctx/evidence.py").read_bytes())
+            self.assertEqual(stale.read_text(encoding="utf-8"), "# stale Windows copy")
+
     def test_unreviewed_background_is_not_distributed(self):
         self.assertFalse((ROOT / "docs" / "background").exists())
 
@@ -78,7 +99,10 @@ class PluginPackageTest(unittest.TestCase):
         self.assertFalse((CLAUDE_PLUGIN / ".codex-plugin" / "plugin.json").exists())
         with tempfile.TemporaryDirectory() as raw:
             cached = Path(raw) / "kiseki-da"
-            shutil.copytree(CLAUDE_PLUGIN, cached)
+            from installer.operations import _runtime_source
+            staged = Path(raw) / "staged"
+            _runtime_source(ROOT, staged)
+            shutil.copytree(staged / "plugins/claude-code/kiseki-da", cached)
             self.assertFalse((cached / "core").is_symlink())
             version = json.loads((cached / ".claude-plugin/plugin.json").read_text())["version"]
             _validate_installed_plugin(cached, "claude-code", version)
@@ -92,7 +116,10 @@ class PluginPackageTest(unittest.TestCase):
         import shutil
         with tempfile.TemporaryDirectory() as raw:
             cached = Path(raw) / "kiseki-da"
-            shutil.copytree(CLAUDE_PLUGIN, cached)
+            from installer.operations import _runtime_source
+            staged = Path(raw) / "staged"
+            _runtime_source(ROOT, staged)
+            shutil.copytree(staged / "plugins/claude-code/kiseki-da", cached)
             version = json.loads((cached / ".claude-plugin/plugin.json").read_text())["version"]
             ownership = {"claude-code": {"installed_path": str(cached)}}
             _smoke_installed_plugins(ownership, version)

@@ -6,6 +6,7 @@ SessionStart passes ``include_policy=True`` so the same policy is injected once.
 from __future__ import annotations
 
 import datetime as _dt
+import os
 import shlex
 import sys
 from dataclasses import dataclass, field
@@ -82,7 +83,10 @@ class _Part:
 
 def command_prefix(home):
     """A quoted, fixed runtime entry point independent of cwd and PATH."""
-    return shlex.join([sys.executable, str(_store.REPO_ROOT / "core/ctx/cli.py"), "--home", str(home)])
+    args = [sys.executable, str(_store.REPO_ROOT / "core/ctx/cli.py"), "--home", str(home)]
+    if os.name == "nt":
+        return "& " + " ".join("'" + arg.replace("'", "''") + "'" for arg in args)
+    return shlex.join(args)
 
 
 def _one_line(value) -> str:
@@ -226,7 +230,7 @@ def required_context(store: Store) -> dict:
     profile = scoped_profile(store)
     part = _profile_part("constraints", profile["constraints"], _store.today(), [])
     lines = [line for item in part.items for line in item]
-    for card in current_cards(store)[:CARD_LIMIT]:
+    for card in sorted(current_cards(store), key=lambda card: card.id):
         lines.extend(f"- {card.id}: {c}" for c in card.constraints)
     text = "\n".join(lines)
     pages = [text[i:i + 3500] for i in range(0, len(text), 3500)] or [""]
@@ -329,7 +333,7 @@ def build(store: Store, budget: int = 2500, include_goals: bool = False,
         "env": _env_part(store, profile),
         "pending": _pending_part(store, profile, today),
     }
-    for card in current_cards(store)[:CARD_LIMIT]:
+    for card in sorted(current_cards(store), key=lambda card: card.id):
         parts["constraints"].items.extend([[f"- {card.id}: {c}"] for c in card.constraints])
     parts["constraints"].total = len(parts["constraints"].items)
 

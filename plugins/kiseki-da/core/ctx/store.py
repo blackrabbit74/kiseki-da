@@ -528,7 +528,8 @@ class Store:
         n = 0
         while dst.exists():
             n += 1
-            dst = d / f"profile-{stamp}-{n}.toml"
+            # A suffix after '~' sorts after the unsuffixed '.toml' on every OS.
+            dst = d / f"profile-{stamp}~{n:06d}.toml"
         shutil.copy2(self.profile_path, dst)
         for old in sorted(d.glob("profile-*.toml"))[:-SNAPSHOT_KEEP]:
             old.unlink(missing_ok=True)
