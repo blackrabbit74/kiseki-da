@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-beta.10 ソース版 - 2026-09-09 OS互換性の追補
+
+- macOSの`/var`と`/private/var`の違いでstagingの包含確認が失敗する問題を修正。
+- Windows CIと共通試験runnerでUTF-8を明示し、Pythonのpatch版によるargparse選択肢の引用符差を試験で扱う。
+- beta.9のWindows運用フィードバックと更新・復元経路を含む。タグ付きreleaseは未発行。
+
 ## 0.1.0-beta.9 ソース版 - 2026-09-09 Windows運用フィードバック
 
 - Windows向け`update --restart-update`を追加。対象cacheと登録情報をtransactionに保存し、native plugin managerで更新する。更新後は新規セッションが必要。

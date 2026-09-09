@@ -13,6 +13,8 @@ CHECKS = [
 ]
 
 if __name__ == "__main__":
+    os.environ["PYTHONUTF8"] = "1"
+    os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
     # Use the available desktop host for the model-free native probes. Tests
     # still run on other systems, reporting their native checks as skipped.
     if "KISEKI_DA_NATIVE_CODEX" not in os.environ:

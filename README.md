@@ -4,7 +4,7 @@
 
 Kiseki DA（Digital Assistant）は、Claude Code / Codexに、案件ごとの文脈、承認制の記憶、証拠付きタスク管理、キャラクター設定を加える個人AIハーネスです。日常の相談から、必要なスキルと初期文脈を持つ作業環境の作成・再開までを支えます。Python 3.11〜3.14の標準ライブラリで動き、外部telemetryはありません。
 
-> **ソース版 0.1.0-beta.9 — Windows運用フィードバック**。PowerShellの誤停止、CLIの起動・証拠照合、Windows用の更新経路を修正しています。Windows 11 nativeは試験運用中です。タグ付き公開版はv0.1.0-beta.8です。
+> **ソース版 0.1.0-beta.10 — Windows運用フィードバック**。PowerShellの誤停止、CLIの起動・証拠照合、Windows用の更新経路を修正しています。Windows 11 nativeは試験運用中です。タグ付き公開版はv0.1.0-beta.8です。
 
 ## できること
 

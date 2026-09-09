@@ -236,6 +236,7 @@ def _run_model_preview(source: Path, persona: dict[str, Any], hosts: list[str]) 
 
 
 def _materialize_claude_runtime(destination: Path) -> None:
+    destination = destination.resolve()
     # Windows checkouts may materialize the Claude aliases as old directories.
     # Build both host packages from the canonical runtime in this new staging tree.
     canonical = destination / "plugins/kiseki-da"

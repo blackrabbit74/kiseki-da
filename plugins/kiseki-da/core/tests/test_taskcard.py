@@ -485,8 +485,7 @@ class CloseDeferTests(TaskcardTestCase):
         cases = [
             (["task", "defer", "t2"], "--reason を指定してください"),
             (["task", "defer", "t2", "--reason"], "--reason に値がありません"),
-            (["task", "set", "t", "--risk", "R9"], "--risk は " +
-             ("'R0', 'R1', 'R2', 'R3'" if sys.version_info >= (3, 13) else "R0, R1, R2, R3") + " のいずれかです（指定値: 'R9'）"),
+            (["task", "set", "t", "--risk", "R9"], "--risk は R0, R1, R2, R3 のいずれかです（指定値: 'R9'）"),
             (["task", "set", "t", "--foo"], "不明な引数です: --foo"),
             (["build", "--budget", "abc"], "--budget は整数で指定してください（指定値: 'abc'）"),
             (["report"], "--week --audit のいずれかを指定してください"),
@@ -502,7 +501,11 @@ class CloseDeferTests(TaskcardTestCase):
                 with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
                     rc = cli.main(argv)
                 self.assertEqual((rc, out.getvalue()), (1, ""), argv)
-                self.assertEqual(err.getvalue(), f"引数が不正です: {expected}\n", argv)
+                actual = err.getvalue()
+                # CPython patch releases differ in whether choices use repr().
+                for risk in ("R0", "R1", "R2", "R3"):
+                    actual = actual.replace(repr(risk), risk)
+                self.assertEqual(actual, f"引数が不正です: {expected}\n", argv)
             out = io.StringIO()
             with contextlib.redirect_stdout(out):
                 rc = cli.main(["task", "--help"])
