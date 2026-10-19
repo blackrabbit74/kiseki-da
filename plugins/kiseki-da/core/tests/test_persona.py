@@ -194,7 +194,7 @@ class PersonaTestCase(unittest.TestCase):
         self.assertNotIn("モデル提供者へ送信", edited.stdout)
 
     def test_live_preview_falls_back_without_host_commands(self):
-        with mock.patch("core.ctx.cli.shutil.which", return_value=None):
+        with mock.patch("core.ctx.cmd_persona.shutil.which", return_value=None):
             results = cli._live_preview({"name": "キセキ"}, ["claude-code", "codex"])
         self.assertEqual([item["status"] for item in results], ["fallback", "fallback"])
         self.assertTrue(all("キセキ" in item["output"] for item in results))

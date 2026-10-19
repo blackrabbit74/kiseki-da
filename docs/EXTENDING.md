@@ -15,7 +15,12 @@
 
 | モジュール | 役割 |
 |---|---|
-| `cli.py` | `kiseki-da` の実行時コマンドの入口。hook もここから入る |
+| `cli.py` | `kiseki-da` の実行時コマンドの入口。引数の組み立て（`build_parser`）と、hook の fail-open の包みもここ |
+| `cmd_task.py` | `task …`・`task override`・`verify run` の処理 |
+| `cmd_memory.py` | `search`・`context`・`capture`・`candidate …`・`approve`・`reject`・`remember` の処理 |
+| `cmd_persona.py` | `setup`・`persona …` の処理（質問、検査、プレビュー） |
+| `cmd_admin.py` | `init`・`build`・`report`・`policy`・`log`・`project …`・`session …`・`evals run` の処理 |
+| `cli_common.py` | コマンドの処理が共通で使う出力と `Store` の補助（`_out`、`_emit_json`、`_make_store` など） |
 | `hooks.py` | ホストの hook 入力を6種の正規化イベントに直し、処理し、ホスト別の形で出力する |
 | `gate.py` | 危険なコマンドの判定（deny / ask）と、Stop での未完了カードの引き止め |
 | `store.py` | 定数と `Store`（状態フォルダの読み書き、イベントログ、記憶候補、検査の呼び出し） |
@@ -85,7 +90,7 @@ CI（`.github/workflows/`）はこのほかに `python acceptance/smoke.py`（OS
 
 ### 実行時コマンドを足す
 
-- **触るところ:** `core/ctx/cli.py` に処理関数 `cmd_<名前>(args)` を書き、`build_parser()` の中で `add("<名前>", cmd_<名前>, help="…")` で登録します。利用者が `kiseki-da <名前>` で呼べるようにするには、`installer/cli.py` の `RUNTIME_COMMANDS` にも同じ名前を足します。
+- **触るところ:** 処理関数 `cmd_<名前>(args)` を、近いまとまりの `core/ctx/cmd_*.py`（上の表）に書きます。どれにも当てはまらなければ `cmd_admin.py` です。`core/ctx/cli.py` でその関数を import し、`build_parser()` の中で `add("<名前>", cmd_<名前>, help="…")` で登録します。出力と `Store` の取得は `cli_common.py` の補助を使います（コマンド側から `cli.py` を import しないでください。`cli.py` は `__main__` として動くので、二重に読み込まれます）。利用者が `kiseki-da <名前>` で呼べるようにするには、`installer/cli.py` の `RUNTIME_COMMANDS` にも同じ名前を足します。
 - **気をつけること:** 利用者向けの文言（help、エラー）は日本語です。利用者の誤りは `UserError` を投げると、日本語1行で終了コード 1 になります。一覧系は `--json` に対応させます。状態を書き換えるコマンドは `--sid` の扱い（複数セッションで省略すると拒否）を既存のコマンドに合わせます。
 - **回すテスト:** 新しいコマンドのテストを `core/tests/` の近いファイルに足します。`tests/test_extending_contracts.py` が `RUNTIME_COMMANDS` の入れ忘れを見つけます。
 
@@ -184,13 +189,13 @@ fail-open の経路（どこで落ちても stdout なし・終了コード 0）
 |---|---|---|
 | `session_start` | `env`, `source` | `hooks.py:handle`（session-start） |
 | `session_end` | `reason`, `candidates_created` | `hooks.py:handle`（session-end） |
-| `context_manifest` | `budget`, `used`, `parts`[{`name`,`tokens`,`truncated`}], `conflicts`[{`key`,`ids`}], `chars`, `required_context`{`hash`,`complete`,`pages`}, `resident_profile_ids` | `hooks.py:handle`（session-start）、`cli.py:cmd_build` |
+| `context_manifest` | `budget`, `used`, `parts`[{`name`,`tokens`,`truncated`}], `conflicts`[{`key`,`ids`}], `chars`, `required_context`{`hash`,`complete`,`pages`}, `resident_profile_ids` | `hooks.py:handle`（session-start）、`cmd_admin.py:cmd_build` |
 | `task_open` | `task`, `risk`, `kind`, `goal`, `workspace` | `taskcard.py:new_card` |
 | `task_update` | `task`, `risk`, `status`, `changed`（文字列の配列）, `workspace` | `taskcard.py:save`（カードを保存するたびに 1 件） |
 | `task_close` | `task`, `risk`, `status`（常に `done`） | `taskcard.py:close`（直前に `task_update` の `status:done` が入る） |
 | `question` | `task`, `text` | `taskcard.py:add_question` |
 | `assumption` | `task`, `text` | `taskcard.py:add_assumption` |
-| `tool_call` | `tool`, `target`（200 字まで・redact 済み）, `ok`, `out_len`, `out_hash`（sha256 の先頭 12 字）, `tool_use_id`, `workspace`, `cwd`, `request_hash`, `effect`, `artifact` | `hooks.py:handle`（post-tool、`artifact` は Read 時のファイル hash）、`cli.py:cmd_verify_run`（`artifact` なし、`tool_use_id` は `verify-<uuid>`） |
+| `tool_call` | `tool`, `target`（200 字まで・redact 済み）, `ok`, `out_len`, `out_hash`（sha256 の先頭 12 字）, `tool_use_id`, `workspace`, `cwd`, `request_hash`, `effect`, `artifact` | `hooks.py:handle`（post-tool、`artifact` は Read 時のファイル hash）、`cmd_task.py:cmd_verify_run`（`artifact` なし、`tool_use_id` は `verify-<uuid>`） |
 | `evidence` | `task`, `criterion`, `ref`, `check_hash`, `workspace` | `taskcard.py:set_evidence` |
 | `gate` | `task`（null あり）, `blocked`, `reason` | `gate.py:stop_gate`（1 回の呼び出しで必ず 1 件） |
 | `guard` | `tool`, `decision`（`allow`/`ask`/`deny`）, `reason`, `target` | `hooks.py:handle`（pre-tool） |
@@ -206,7 +211,7 @@ fail-open の経路（どこで落ちても stdout なし・終了コード 0）
 | `user_input` | `user_input_id`, `chars`, `instruction_changed` | `store.py:Store.record_user_input` |
 | `human_override` | `task`, `workspace`, `request_hash`, `user_input_id`, `quote`, `reason` | `evidence.py:record_override` |
 | `authority_used` | `authority_ref`, `request_hash` | `evidence.py:consume_override` |
-| `context_read` | `content_hash`, `page`, `pages`, `workspace` | `cli.py:cmd_context`（`required` のとき） |
+| `context_read` | `content_hash`, `page`, `pages`, `workspace` | `cmd_memory.py:cmd_context`（`required` のとき） |
 
 補足:
 
@@ -214,7 +219,7 @@ fail-open の経路（どこで落ちても stdout なし・終了コード 0）
 - `context_manifest` は `ctx build`（`cmd_build`）でも書かれる。週次の `resident_tokens_avg` はこれも平均に含む。
 - `user_input` が保存する発言本文は events ではなく `session/<sid>.user.json` に入る。
 
-出どころ: `core/ctx/store.py`（`EVENT_TYPES`, `LOG_TYPES`, `append_event`, `redact`）、`core/ctx/cli.py`（`cmd_log`, `_check_log_event`）、`core/ctx/hooks.py`、`core/ctx/taskcard.py`、`core/ctx/gate.py`、`core/ctx/search.py`、`core/ctx/evidence.py`、`core/schema/event.schema.json`。
+出どころ: `core/ctx/store.py`（`EVENT_TYPES`, `LOG_TYPES`, `append_event`, `redact`）、`core/ctx/cmd_admin.py`（`cmd_log`, `_check_log_event`）、`core/ctx/hooks.py`、`core/ctx/taskcard.py`、`core/ctx/gate.py`、`core/ctx/search.py`、`core/ctx/evidence.py`、`core/schema/event.schema.json`。
 
 ### 常駐文脈の部品と予算
 
@@ -248,7 +253,7 @@ fail-open の経路（どこで落ちても stdout なし・終了コード 0）
 
 manifest のキー: `budget`, `used`, `parts`（`policy` + 7 部品の `{name, tokens, truncated}`）, `conflicts`, `chars`, `required_context`（`hash`, `complete`, `pages`）, `resident_profile_ids`（本文に実際に載った profile id）。`required_context` のページ分割は 1 ページ 3500 文字。
 
-出どころ: `core/ctx/build.py`（`PART_NAMES`, `MAX_CHARS`, `LINE_LIMITS`, `CARD_LIMIT`, `CARD_TOKENS`, `ENV_TOKENS`, `build`, `_resolve_keys`, `_cards_part`, `_env_part`, `required_context`）、`core/ctx/persona.py`（`PERSONA_TOKEN_LIMIT`, `render_persona`）、`core/ctx/store.py`（`estimate_tokens`）、`core/ctx/cli.py`（`cmd_build`, `cmd_context`, `--budget`）。
+出どころ: `core/ctx/build.py`（`PART_NAMES`, `MAX_CHARS`, `LINE_LIMITS`, `CARD_LIMIT`, `CARD_TOKENS`, `ENV_TOKENS`, `build`, `_resolve_keys`, `_cards_part`, `_env_part`, `required_context`）、`core/ctx/persona.py`（`PERSONA_TOKEN_LIMIT`, `render_persona`）、`core/ctx/store.py`（`estimate_tokens`）、`core/ctx/cmd_admin.py`（`cmd_build`）、`core/ctx/cmd_memory.py`（`cmd_context`）、`core/ctx/cli.py`（`--budget`）。
 
 ### 検索
 
@@ -287,7 +292,7 @@ score = bm25 * KIND_WEIGHTS[kind] * boost * 0.5 ** (経過日数 / HALF_LIFE_DAY
 
 `since_days`（既定 180 日）が効くのは `events` と `capture` だけ。`tasks` と `profile` は常に全件。`tool_call` `task_*` `gate` `guard` などはどの kind にも入らない。ヒットは `{id, kind, date, source, stale, score, snippet}`。
 
-出どころ: `core/ctx/search.py`（`K1`, `B`, `HALF_LIFE_DAYS`, `KIND_WEIGHTS`, `CORRECTION_BOOST`, `SNIPPET_TOKENS`, `KINDS`, `EVENT_TEXT_TYPES`, `_CJK_RANGES`, `_TOKEN_RE`, `tokenize`, `_rank`, `_snippet`, `_event_docs`, `_task_docs`, `_profile_docs`, `search`）、`core/ctx/cli.py`（`cmd_search`, `search` の引数定義）。
+出どころ: `core/ctx/search.py`（`K1`, `B`, `HALF_LIFE_DAYS`, `KIND_WEIGHTS`, `CORRECTION_BOOST`, `SNIPPET_TOKENS`, `KINDS`, `EVENT_TEXT_TYPES`, `_CJK_RANGES`, `_TOKEN_RE`, `tokenize`, `_rank`, `_snippet`, `_event_docs`, `_task_docs`, `_profile_docs`, `search`）、`core/ctx/cmd_memory.py`（`cmd_search`）、`core/ctx/cli.py`（`search` の引数定義）。
 
 ### 週次レポートのキー
 
@@ -319,7 +324,7 @@ score = bm25 * KIND_WEIGHTS[kind] * boost * 0.5 ** (経過日数 / HALF_LIFE_DAY
 
 `events` は store 内の全 sid を混ぜて読む。キー一覧は `report.WEEK_KEYS`、監査用の `report.audit` は別関数（`AUDIT_KEYS`、窓 `AUDIT_DAYS`=30 日）。
 
-出どころ: `core/ctx/report.py`（`WEEK_KEYS`, `WEEK_DAYS`, `USEFUL_WINDOW`, `week`, `_ratio`, `_stale_count`）、`core/ctx/taskcard.py`（`missing_evidence`）、`core/ctx/cli.py`（`cmd_report`）。
+出どころ: `core/ctx/report.py`（`WEEK_KEYS`, `WEEK_DAYS`, `USEFUL_WINDOW`, `week`, `_ratio`, `_stale_count`）、`core/ctx/taskcard.py`（`missing_evidence`）、`core/ctx/cmd_admin.py`（`cmd_report`）。
 
 ### ガード規則
 
