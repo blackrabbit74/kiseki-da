@@ -59,7 +59,7 @@ kiseki-da update --dry-run
 kiseki-da uninstall
 ```
 
-従来のtask、search、candidate、approve、reject、remember、reportも`kiseki-da`から利用できます。設計は[ARCHITECTURE.md](docs/ARCHITECTURE.md)、リリース判断は[RELEASE-DECISIONS.md](docs/RELEASE-DECISIONS.md)、脆弱性の連絡方法は[SECURITY.md](SECURITY.md)を参照してください。
+従来のtask、search、candidate、approve、reject、remember、reportも`kiseki-da`から利用できます。設計は[ARCHITECTURE.md](docs/ARCHITECTURE.md)、コードを改造・拡張する手順と契約は[EXTENDING.md](docs/EXTENDING.md)、リリース判断は[RELEASE-DECISIONS.md](docs/RELEASE-DECISIONS.md)、脆弱性の連絡方法は[SECURITY.md](SECURITY.md)を参照してください。
 
 Codexが通常のPostToolUseで終了コードを渡さない場合、その結果は安全のため完了証拠になりません。`kiseki-da verify run -- <command> [args...]`で検証コマンドを実行すると、終了コード付きの証拠を記録できます。Claude/Codexを同じscopeで並行利用する場合、SessionStartに表示された`--sid`を各CLI commandへ付けます。省略時に複数sessionを検出すると、混線防止のため書込前に拒否します。
 

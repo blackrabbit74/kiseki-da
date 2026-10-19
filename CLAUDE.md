@@ -12,3 +12,4 @@
 - Codex plugin manifests follow `.codex-plugin/plugin.json`; do not add unsupported manifest fields. Claude uses its separate manifest and hook definition.
 - User-facing text is Japanese. Identifiers, code comments, and commit messages are English.
 - Record non-obvious implementation decisions in `docs/DECISIONS.md` with rationale and retirement condition.
+- Before changing runtime behavior, read `docs/EXTENDING.md` (where each kind of change goes, the invariants, the contracts). Update its tables in the same change; `tests/test_extending_contracts.py` checks them against the code.
