@@ -1,7 +1,8 @@
-"""gate.py — pre-tool guard (deny/ask lists) and stop gate (INTERFACES.md §3, §6.2).
+"""gate.py — pre-tool guard (deny/ask lists) and stop gate.
 
-guard() evaluates pa_home() and REPO_ROOT / "core" at call time; stop_gate() writes exactly one `gate`
-event per call (DECISIONS A-5, A-7, A-8, A-12). Depends on store and taskcard only; no I/O at import.
+guard() evaluates pa_home() and REPO_ROOT / "core" at call time. stop_gate() writes exactly one `gate`
+event per call; when several open cards match, it records the most recently updated one and the rest block
+on later stops. Depends on store and taskcard only; no I/O at import.
 """
 from __future__ import annotations
 
@@ -15,7 +16,8 @@ from core.ctx import evidence as E
 from core.ctx.store import Store, UserError
 
 # Commands that read a file's content; naming ~/.ssh, ~/.aws or a .env file as their argument is denied
-# (A-5 / A-8: reads are denied, R3 words are asked). Writes such as `echo ... >> .env` are not matched.
+# (reads of secrets are denied, R3 words such as deploy / DROP / secret are asked).
+# Writes such as `echo ... >> .env` are not matched.
 _READERS = (
     r"cat|less|more|head|tail|bat|batcat|vi|vim|nvim|nano|emacs|code|open|strings|xxd|hexdump|od|"
     r"base64|grep|egrep|fgrep|rg|ag|awk|sed|cp|scp|rsync|source|type|gc|Get-Content"
@@ -95,7 +97,9 @@ def _resolve(raw: str, cwd: str) -> Path | None:
 
 
 def guard(tool: str, tool_input: dict, cwd: str) -> tuple[Literal["allow", "ask", "deny"], str]:
-    """§6.2 rules (1)-(3). pa_home() and REPO_ROOT / "core" are evaluated on every call."""
+    """Shell tools: a direct `hook` call is denied, then DENY_PATTERNS; read-only searches (rg/grep) and the
+    CLI's own commands are allowed before ASK_PATTERNS. Write tools: paths under the state dir or core/ are
+    denied. Anything else is allowed. pa_home() and REPO_ROOT / "core" are evaluated on every call."""
     tool = tool or ""
     if not isinstance(tool_input, dict):
         tool_input = {}
@@ -166,7 +170,8 @@ def stop_gate(store: Store, sid: str, stop_hook_active: bool = False) -> tuple[b
         if card.status == "open" and card.risk in _BLOCKING_RISKS:
             open_cards.append(card)
     if open_cards:
-        card = max(open_cards, key=lambda c: (c.updated, c.id))   # A-7: newest `updated` first
+        # several open cards match: record the most recently updated one; the rest block on the next stop
+        card = max(open_cards, key=lambda c: (c.updated, c.id))
         reason = (f"open な {card.risk} カード {card.id} があります。閉じるか保留してください: "
                   f"kiseki-da task close {card.id} --sid {sid} / "
                   f"kiseki-da task defer {card.id} --reason <未検証の理由> --sid {sid}")

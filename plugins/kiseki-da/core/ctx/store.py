@@ -43,7 +43,7 @@ CANDIDATE_STATUSES = ("pending", "approved", "rejected")
 KIND_TO_SECTION = {"constraint": "constraints", "preference": "preferences", "goal": "goals", "fact": "facts"}
 SECTIONS = ("constraints", "preferences", "goals", "facts")
 DEFAULT_REVIEW_DAYS = {"constraints": 180, "preferences": 180, "goals": 90, "facts": 365}
-# Source priority, highest first (ARCHITECTURE §5.4). `document:<ref>` sources rank as "document".
+# Source priority, highest first (docs/PRINCIPLES.md LP-4). `document:<ref>` sources rank as "document".
 SOURCE_ORDER = ("user-stated", "approved-inference", "document")
 SNAPSHOT_KEEP = 30
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")

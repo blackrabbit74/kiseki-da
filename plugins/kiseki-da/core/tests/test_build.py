@@ -1,5 +1,5 @@
 """test_build.py — resident block: used ≤ 2,500, policy part, stale exclusion, key conflicts, budget cuts,
-`未承認候補` / `session:` lines, chars ≤ 9,000, open cards (INTERFACES §10)."""
+`未承認候補` / `session:` lines, chars ≤ 9,000, open cards."""
 from __future__ import annotations
 
 import contextlib
@@ -207,7 +207,7 @@ class BuildTestCase(unittest.TestCase):
 
     # ------------------------------------------------------------ fixture horizon
     def test_fixture_review_by_horizon(self):
-        # INTERFACES §1: the sample profile carries exactly one expired item. Staleness is judged
+        # The sample profile carries exactly one expired item. Staleness is judged
         # against the wall clock (store.today), so every other review_by — and the _item() default —
         # must stay at least five years out, or the stale-exclusion assertions fail on a fixed date.
         self.use_fixture()

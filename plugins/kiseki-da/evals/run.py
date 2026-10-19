@@ -2,12 +2,12 @@
 """Kiseki DA evals runner (v0.1: ``--dry-run`` only).
 
 Lists the template cases in ``cases.jsonl`` next to this file. The execution
-body and pass^k are deliberately not implemented (INTERFACES.md §0,
-docs/BUILD_PLAN.md §3). The script imports nothing from ``core`` so it can be
+body and pass^k are deliberately not implemented in v1: the runner only lists
+the cases. The script imports nothing from ``core`` so it can be
 run from any cwd on its own; ``cli.py evals run`` only execs it and forwards
 the exit code.
 
-Record shape (one JSON object per line, DECISIONS A-21):
+Record shape (one JSON object per line):
     {"id": str, "risk": "R0".."R3", "kind": str, "input": str, "expect": [str]}
 """
 from __future__ import annotations
@@ -26,7 +26,7 @@ USAGE = (
     "  --json     ケースを JSON 配列で出力する\n"
     "  -h         この説明を表示する\n"
 )
-# argparse's English error texts reachable here → Japanese (BUILD_BRIEF §2: CLI text is Japanese only).
+# argparse's English error texts reachable here → Japanese (CLI text is Japanese only, see CLAUDE.md).
 # Same wording as cli.py's _ARGPARSE_JA, duplicated because run.py imports nothing from core. With three
 # store_true flags and parse_known_args only `--flag=value` reaches error(); an unmatched text keeps the
 # `引数が不正です:` prefix and argparse's wording, as in cli.py.

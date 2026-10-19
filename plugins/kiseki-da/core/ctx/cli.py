@@ -30,7 +30,8 @@ HOOK_EVENTS = ("session-start", "user-input", "pre-tool", "post-tool", "stop", "
 ENVS = ("claude-code", "codex")
 SEARCH_KINDS = ("events", "tasks", "profile", "capture")
 
-# Fixed English reasons from taskcard.check_evidence / close → Japanese for the CLI (DECISIONS A-15)
+# Fixed English reasons from taskcard.check_evidence / close → Japanese for the CLI
+# (stdout `<Cn>: <reason>`, one Japanese line on stderr, exit 1)
 REASON_JA = {
     "no evidence": "証拠がありません",
     "evidence not found": "証拠イベントが見つかりません",
@@ -48,7 +49,7 @@ REASON_JA = {
     "evidence predates task": "タスク作成前の証拠です",
 }
 
-# argparse's English error texts → Japanese (BUILD_BRIEF §2: CLI text is Japanese only). Same wording on
+# argparse's English error texts → Japanese (CLI text is Japanese only, see CLAUDE.md). Same wording on
 # Python 3.11–3.14. A text no pattern matches keeps the `引数が不正です:` prefix and argparse's wording.
 _ARGPARSE_JA: tuple[tuple[str, str], ...] = (
     (r"the following arguments are required: (?P<a>.+)", "{a} を指定してください"),
@@ -439,7 +440,7 @@ def cmd_task_brief(args) -> int:
 
 
 def _check_log_event(st: Store, ev: dict) -> None:
-    """DECISIONS A-17: `ctx log` checks only the common keys (ts / sid / seq / type) of the user-supplied event.
+    """`ctx log` checks only the common keys (ts / sid / seq / type) of the user-supplied event.
     `seq` is always assigned by the store; null / empty `ts` and `sid` mean "default", as in append_event."""
     for k in ("ts", "sid"):
         if ev.get(k) in (None, ""):

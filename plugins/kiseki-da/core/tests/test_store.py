@@ -1,4 +1,4 @@
-"""test_store.py — TOML round trip, seq, snapshot, validate, sid rule, approve --supersedes (INTERFACES §10)."""
+"""test_store.py — TOML round trip, seq, snapshot, validate, sid rule, approve --supersedes."""
 from __future__ import annotations
 
 import contextlib
@@ -260,7 +260,7 @@ class StoreTestCase(unittest.TestCase):
         prof = self.st.read_profile()
         self.st.write_profile(prof)
         self.assertEqual(len(list((self.home / "snapshots").glob("profile-*.toml"))), 1)
-        prof["constraints"] = [{"id": "c1", "text": "x"}]  # hand-edited minimal item: only id / text are 必須 (§1)
+        prof["constraints"] = [{"id": "c1", "text": "x"}]  # hand-edited minimal item: only id / text are 必須
         self.st.write_profile(prof)
         self.assertEqual(self.st.read_profile()["constraints"], [{"id": "c1", "text": "x"}])
         self.assertEqual(len(list((self.home / "snapshots").glob("profile-*.toml"))), 2)
@@ -272,7 +272,7 @@ class StoreTestCase(unittest.TestCase):
 
     # ------------------------------------------------------------ validate
     def test_cli_log_checks_common_keys(self):
-        """`ctx log` validates ts / sid before appending (A-17): exit 1 with one Japanese line, nothing written."""
+        """`ctx log` validates ts / sid before appending (common keys only): exit 1 with one Japanese line, nothing written."""
         from core.ctx import cli
 
         def run(data: str) -> tuple[int, str, str]:
@@ -311,7 +311,7 @@ class StoreTestCase(unittest.TestCase):
         self.assertTrue(any(e.startswith("schema") for e in errs))
         self.assertTrue(any(e.startswith("da") for e in errs))
         self.assertTrue(any(e.startswith("constraints[0].id") for e in errs))
-        self.assertFalse(any(e.startswith("constraints[0].source") for e in errs))  # not 必須 (INTERFACES §1)
+        self.assertFalse(any(e.startswith("constraints[0].source") for e in errs))  # not 必須
         minimal = {"schema": 1, "identity": {}, "da": {}, "constraints": [{"id": "c1", "text": "t"}]}
         self.assertEqual(self.st.validate("profile", minimal), [])
         typed = dict(ok_item, source=5, recorded_at=20260904, review_by=dt.time(1, 2), confidence="high")
@@ -544,7 +544,7 @@ class StoreTestCase(unittest.TestCase):
 
 
 class ReportTestCase(unittest.TestCase):
-    """report.week() lives here to keep the test-file count at the 52-file plan (INTERFACES §10)."""
+    """report.week() lives here to stay within the file-count limit in test_limits.py."""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -617,7 +617,7 @@ class ReportTestCase(unittest.TestCase):
         self.assertIsNone(d["search_cited_ratio"])
 
     def test_week_skips_unreadable_card(self):
-        """One non-UTF-8 card (hand-saved as Shift-JIS) is skipped, all keys still come out (INTERFACES §8; same guard as build/search/gate)."""
+        """One non-UTF-8 card (hand-saved as Shift-JIS) is skipped, all keys still come out."""
         from core.ctx import report
         from core.ctx import taskcard
         taskcard.new_card(self.st, "ok card", risk="R1", id="ok")
@@ -726,7 +726,7 @@ class ReportTestCase(unittest.TestCase):
         d = report.audit(st)
         self.assertEqual((d["profile_items_never_hit"], d["duplicate_profile_texts"]), (["p1"], []))
         st.profile_path.unlink()
-        d = report.audit(st)   # no profile.toml → empty profile (DECISIONS), every key still present
+        d = report.audit(st)   # no profile.toml → empty profile, every key still present
         self.assertEqual(tuple(d), report.AUDIT_KEYS)
         self.assertEqual((d["profile_items_never_hit"], d["duplicate_profile_texts"]), ([], []))
 

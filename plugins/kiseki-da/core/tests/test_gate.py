@@ -1,4 +1,4 @@
-"""test_gate.py — guard deny/ask/allow (INTERFACES §10: 12 cases + negatives) and stop_gate once-per-card."""
+"""test_gate.py — guard deny/ask/allow (12 core cases + negatives) and stop_gate once-per-card."""
 from __future__ import annotations
 
 import os
@@ -35,7 +35,7 @@ class GuardTestCase(unittest.TestCase):
             self.assertTrue(reason, f"{command!r}: reason must not be empty")
             self.assertTrue(any(ord(ch) > 127 for ch in reason), f"{command!r}: reason must be Japanese")
 
-    # ------------------------------------------------------------ the 12 cases of INTERFACES §10
+    # ------------------------------------------------------------ the 12 core cases (deny / ask / allow)
     def test_deny_rm_root(self):
         self.assert_decision("deny", "rm -rf /")
 
@@ -77,7 +77,7 @@ class GuardTestCase(unittest.TestCase):
     def test_allow_ls(self):
         self.assert_decision("allow", "ls")
 
-    # ------------------------------------------------------------ more deny variants (A-5)
+    # ------------------------------------------------------------ more deny variants
     def test_deny_rm_variants(self):
         for cmd in ("rm -rf /*", "rm -rf $HOME", 'rm -rf "$HOME"', "rm -rf ..", "rm -fr ~", "rm -r -f /",
                     "rm -f -r /", "sudo rm -rf / --no-preserve-root", "rm -rf ~/"):

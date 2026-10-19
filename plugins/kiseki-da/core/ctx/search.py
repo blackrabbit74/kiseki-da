@@ -1,4 +1,4 @@
-"""search.py — BM25 + time decay + provenance over events / tasks / profile (INTERFACES.md §7).
+"""search.py — BM25 + time decay + provenance over events / tasks / profile.
 
 `search()` only ranks documents and writes the `search` event; the CLI prints the hits
 (`[<kind>] <date> <source>(<id>) [stale]` followed by the snippet). Depends on store and taskcard only.
