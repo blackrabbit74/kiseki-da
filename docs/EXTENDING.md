@@ -18,7 +18,10 @@
 | `cli.py` | `kiseki-da` の実行時コマンドの入口。hook もここから入る |
 | `hooks.py` | ホストの hook 入力を6種の正規化イベントに直し、処理し、ホスト別の形で出力する |
 | `gate.py` | 危険なコマンドの判定（deny / ask）と、Stop での未完了カードの引き止め |
-| `store.py` | 状態フォルダの読み書き、イベントログ、記憶候補、スキーマ検査 |
+| `store.py` | 定数と `Store`（状態フォルダの読み書き、イベントログ、記憶候補、検査の呼び出し） |
+| `fileio.py` | ファイルの原子書き込み、JSONL の追記と読み出し、ロック（`Store` を知らない汎用部分） |
+| `tomlemit.py` | profile などを書き出す最小の TOML 書き出し（汎用部分） |
+| `schemacheck.py` | `core/schema/*.json` から必須キーと型を組み立てる検査（汎用部分） |
 | `taskcard.py` | タスクカードの読み書き、完了条件と証拠の突き合わせ |
 | `evidence.py` | 証拠と明示指示の出所の照合 |
 | `build.py` | セッション開始時に注入する常駐文脈の組み立てと予算 |
@@ -106,7 +109,7 @@ CI（`.github/workflows/`）はこのほかに `python acceptance/smoke.py`（OS
 
 ### 状態ファイルの形を変える
 
-- **触るところ:** `core/schema/` の JSON スキーマと、読み書きする `store.py`（profile・候補・イベント）か `taskcard.py`（タスクカード）。検査は `Store.validate` がスキーマを読んで行います。
+- **触るところ:** `core/schema/` の JSON スキーマと、読み書きする `store.py`（profile・候補・イベント）か `taskcard.py`（タスクカード）。検査は `Store.validate` がスキーマを読んで行います（スキーマの読み込みと型の対応は `schemacheck.py`、TOML の書き出しは `tomlemit.py`）。
 - **気をつけること:** すでに使っている利用者の状態ファイルを読めなくしないでください。profile は schema 1 と 2 の両方を読み、知らない TOML の項目もそのまま残す約束です（`INTERFACES.md` の「Compatibility」）。
 - **回すテスト:** `core/tests/test_store.py`（TOML の往復）、`core/tests/test_persona.py` の schema 1 のテスト、`core/tests/test_taskcard.py`（カードの往復）。
 
