@@ -104,7 +104,7 @@ class NewCardGoalTests(TaskcardTestCase):
 
 
 class IdValidationTests(TaskcardTestCase):
-    """show/set/close/defer/brief pass a raw positional id; load/save must keep it inside $PA_HOME/tasks."""
+    """show/set/close/defer/brief pass a raw positional id; load/save must keep it inside $KISEKI_DA_HOME/tasks."""
 
     def test_load_and_save_reject_ids_outside_the_namespace(self):
         for bad in ("../victim", "A", "-x", "a/b", "a.b", "", "a" * 65):

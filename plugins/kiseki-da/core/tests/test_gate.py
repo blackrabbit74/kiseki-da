@@ -54,7 +54,7 @@ class GuardTestCase(unittest.TestCase):
     def test_deny_read_ssh_key(self):
         self.assert_decision("deny", "cat ~/.ssh/id_rsa")
 
-    def test_deny_write_under_pa_home(self):
+    def test_deny_write_under_state_home(self):
         decision, reason = gate.guard("Write", {"file_path": str(self.home / "profile.toml"), "content": "x"}, "/tmp")
         self.assertEqual(decision, "deny")
         self.assertIn("KISEKI_DA_HOME", reason)
@@ -185,7 +185,7 @@ class GuardTestCase(unittest.TestCase):
                     "kubectl get deployments", "cat paypal.txt", ""):
             self.assert_decision("allow", cmd)
 
-    def test_allow_write_outside_pa_home(self):
+    def test_allow_write_outside_state_home(self):
         with tempfile.TemporaryDirectory() as other:
             decision, reason = gate.guard("Write", {"file_path": str(Path(other) / "notes.md")}, "/tmp")
         self.assertEqual((decision, reason), ("allow", ""))
@@ -194,12 +194,12 @@ class GuardTestCase(unittest.TestCase):
         self.assertEqual(gate.guard("Write", {"file_path": "tasks/x.md"}, str(self.home))[0], "deny")
         with tempfile.TemporaryDirectory() as other:
             self.assertEqual(gate.guard("Write", {"file_path": "tasks/x.md"}, other)[0], "allow")
-            # `..` climbs out of the working directory into PA_HOME
+            # `..` climbs out of the working directory into KISEKI_DA_HOME
             sub = self.home / "sub"
             sub.mkdir()
             self.assertEqual(gate.guard("Write", {"file_path": "../profile.toml"}, str(sub))[0], "deny")
 
-    def test_pa_home_is_evaluated_at_call_time(self):
+    def test_state_home_is_evaluated_at_call_time(self):
         with tempfile.TemporaryDirectory() as other:
             path = str(Path(other).resolve() / "profile.toml")
             self.assertEqual(gate.guard("Write", {"file_path": path}, "/tmp")[0], "allow")

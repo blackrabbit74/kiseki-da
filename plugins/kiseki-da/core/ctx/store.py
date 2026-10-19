@@ -57,13 +57,20 @@ class UserError(Exception):
 # ---------------------------------------------------------------- helpers
 
 def kiseki_da_home() -> Path:
-    """Evaluate KISEKI_DA_HOME (or ~/.kiseki-da) on every call."""
+    """Evaluate KISEKI_DA_HOME (or ~/.kiseki-da) on every call.
+
+    installer/util.kiseki_home() applies the same rule; tests/test_state_home.py keeps the two identical.
+    """
     raw = os.environ.get("KISEKI_DA_HOME")
     return (Path(raw).expanduser() if raw else Path.home() / ".kiseki-da").resolve()
 
 
 def pa_home() -> Path:
-    """Backward-compatible function name; legacy PA_HOME is intentionally ignored."""
+    """Deprecated alias of kiseki_da_home() for code written against the old pa-harness name.
+
+    Legacy PA_HOME is intentionally ignored here; legacy_home_signal() reports it for migration only.
+    New code calls kiseki_da_home().
+    """
     return kiseki_da_home()
 
 

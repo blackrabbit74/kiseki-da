@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:pa-harness:schema:event",
-  "title": "pa-harness event",
+  "$id": "urn:kiseki-da:schema:event",
+  "title": "Kiseki DA event",
   "description": "$KISEKI_DA_HOME/events.jsonl の 1 行。共通 4 キーは必須、残りは type ごとの追加フィールド: session_start{env,source} session_end{reason,candidates_created} context_manifest{budget,used,parts,conflicts,chars} task_open{task,risk,kind,goal} task_update{task,risk,status,changed} task_close{task,risk,status} question/assumption{task,text} tool_call{tool,target,ok,out_len,out_hash} evidence{task,criterion,ref} gate{task,blocked,reason} guard{tool,decision,reason,target} correction{before,after,quote} capture{text,source,url} candidate{cid,kind,source} approval{cid,pid,action} worker_dispatch{task,role,tokens_est} worker_return{task,role,tokens_est,text} search{query,k,hits} proposal{text,evidence_counts,kill_condition} error{where,message}。イベント id は ev:<sid>:<seq>（保存しない）。",
   "type": "object",
   "required": [

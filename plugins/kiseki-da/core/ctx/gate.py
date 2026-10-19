@@ -1,6 +1,6 @@
 """gate.py — pre-tool guard (deny/ask lists) and stop gate.
 
-guard() evaluates pa_home() and REPO_ROOT / "core" at call time. stop_gate() writes exactly one `gate`
+guard() evaluates kiseki_da_home() and REPO_ROOT / "core" at call time. stop_gate() writes exactly one `gate`
 event per call; when several open cards match, it records the most recently updated one and the rest block
 on later stops. Depends on store and taskcard only; no I/O at import.
 """
@@ -99,7 +99,7 @@ def _resolve(raw: str, cwd: str) -> Path | None:
 def guard(tool: str, tool_input: dict, cwd: str) -> tuple[Literal["allow", "ask", "deny"], str]:
     """Shell tools: a direct `hook` call is denied, then DENY_PATTERNS; read-only searches (rg/grep) and the
     CLI's own commands are allowed before ASK_PATTERNS. Write tools: paths under the state dir or core/ are
-    denied. Anything else is allowed. pa_home() and REPO_ROOT / "core" are evaluated on every call."""
+    denied. Anything else is allowed. kiseki_da_home() and REPO_ROOT / "core" are evaluated on every call."""
     tool = tool or ""
     if not isinstance(tool_input, dict):
         tool_input = {}
@@ -121,6 +121,7 @@ def guard(tool: str, tool_input: dict, cwd: str) -> tuple[Literal["allow", "ask"
                 return "ask", reason
         return "allow", ""
     if tool in _WRITE_TOOLS or "file_paths" in tool_input:
+        # pa_home() covers an older store module (before the rename) already loaded in the same process
         home = _store.kiseki_da_home() if hasattr(_store, "kiseki_da_home") else _store.pa_home()
         core = (_store.REPO_ROOT / "core").resolve()
         for raw in _collect_paths(tool_input):

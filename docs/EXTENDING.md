@@ -60,6 +60,7 @@ CI（`.github/workflows/`）はこのほかに `python acceptance/smoke.py`（OS
 | 対話方針（`core/policy/interaction.md`）は 60 行・800 token 以内 | 常駐文脈を小さく保つ | `core/tests/test_limits.py` の `test_policy_and_module_limits` |
 | 常駐文脈は 2,500 推定 token・9,000 文字以内 | 長い文脈は精度を下げる | `core/tests/test_build.py` の `test_chars_never_exceed_9000`、`test_budget_cut_order`、`acceptance/smoke.sh` の C1c |
 | キャラクター設定は表現だけを変え、権限・記憶・検証・完了判定を変えない。220 token 以内 | 人格を権限と取り違えない | `core/tests/test_persona.py` の `test_custom_style_cannot_change_authority_or_hold_secrets`、`test_all_fields_normalize_validate_and_render_under_cap` |
+| 状態フォルダの場所は installer と本体で同じ規則（`KISEKI_DA_HOME`、なければ `~/.kiseki-da`）で決まる。旧 `PA_HOME` は移行の案内にだけ使い、状態フォルダにはしない | installer と本体が別の場所を読み書きすると状態が分かれる | `tests/test_state_home.py` の `test_installer_and_runtime_resolve_the_same_home` |
 | すべてのイベント種別に書き手がいる | 誰も書かない記録を読む処理を作らない | `core/tests/test_limits.py` の `test_event_types_have_writers` |
 | プラグインの hook 定義は6種の正規化イベントにちょうど対応する | 抜けや余分な登録を防ぐ | `core/tests/test_limits.py` の `test_plugin_hooks_cover_exact_normalized_set` |
 | コメントや文書の参照先は公開ツリー内に実在する | 読み手を行き止まりにしない | `tests/test_doc_refs.py` |

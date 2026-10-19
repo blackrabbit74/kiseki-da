@@ -656,7 +656,7 @@ class ReportTestCase(unittest.TestCase):
         self.assertIsInstance(d["policy_lines"], int)
         self.assertIsInstance(d["policy_tokens"], int)
         json.loads(S.dumps(d))   # JSON-serialisable (--json prints the dict itself)
-        self.assertEqual(self._home_snapshot(), before)   # no event, no file under PA_HOME
+        self.assertEqual(self._home_snapshot(), before)   # no event, no file under KISEKI_DA_HOME
 
     def test_audit_file_count_and_writers_match_test_limits(self):
         from core.ctx import report
