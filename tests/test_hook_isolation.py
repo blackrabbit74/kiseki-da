@@ -70,8 +70,9 @@ class HookIsolationTest(unittest.TestCase):
                     stack.enter_context(patch)
                 stack.enter_context(mock.patch.dict(os.environ, {"KISEKI_DA_HOME": home}))
                 for event, env, path in runs:
-                    payload = path.read_text(encoding="utf-8").replace("__FX__", str(FIXTURES)) \
-                        .replace("__CWD__", workspace)
+                    # POSIX form: a Windows path's backslashes would be invalid escapes inside the JSON payload
+                    payload = path.read_text(encoding="utf-8").replace("__FX__", FIXTURES.as_posix()) \
+                        .replace("__CWD__", Path(workspace).as_posix())
                     out = io.StringIO()
                     with mock.patch.object(sys, "stdin", io.StringIO(payload)), contextlib.redirect_stdout(out), \
                             contextlib.redirect_stderr(io.StringIO()):
