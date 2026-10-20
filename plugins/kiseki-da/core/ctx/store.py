@@ -1,14 +1,13 @@
-"""store.py — constants, Kiseki DA state I/O, TOML emitter and validation.
+"""store.py — constants, shared helpers and Store, the Kiseki DA state I/O.
 
-Every write under ``KISEKI_DA_HOME`` goes through this module.
+Every write under ``KISEKI_DA_HOME`` goes through Store; the generic file primitives, TOML emitter
+and schema checks it uses live in fileio.py, tomlemit.py and schemacheck.py.
 Other modules must not redefine the constants declared here.
 """
 from __future__ import annotations
 
-import contextlib
 import datetime as _dt
 import hashlib
-import functools
 import json
 import os
 import re
@@ -18,14 +17,17 @@ import tomllib
 from pathlib import Path
 from typing import Iterator, Literal
 
-try:
-    import fcntl as _fcntl
-except ImportError:  # Windows
-    _fcntl = None
-try:
-    import msvcrt as _msvcrt
-except ImportError:  # POSIX
-    _msvcrt = None
+# Generic parts live in their own modules; they are re-exported here so `from core.ctx.store import ...`
+# keeps working for tests, the installer and customer code (docs/DECISIONS.md, 2026-10-19).
+from core.ctx import tomlemit as _tomlemit
+from core.ctx.fileio import (  # noqa: F401
+    _append_jsonl, _atomic_write, _iter_jsonl, _lock, _locked_append, _unlock, dumps,
+)
+from core.ctx.schemacheck import (  # noqa: F401
+    _SCHEMA_FILES, _check_obj, _is_type, _schema_table, _schema_tables, _schema_type,
+)
+from core.ctx.tomlemit import _BARE_KEY, _toml_key, _toml_str, _toml_value  # noqa: F401
+
 
 REPO_ROOT: Path = Path(__file__).resolve().parents[2]
 
@@ -43,7 +45,7 @@ CANDIDATE_STATUSES = ("pending", "approved", "rejected")
 KIND_TO_SECTION = {"constraint": "constraints", "preference": "preferences", "goal": "goals", "fact": "facts"}
 SECTIONS = ("constraints", "preferences", "goals", "facts")
 DEFAULT_REVIEW_DAYS = {"constraints": 180, "preferences": 180, "goals": 90, "facts": 365}
-# Source priority, highest first (ARCHITECTURE §5.4). `document:<ref>` sources rank as "document".
+# Source priority, highest first (docs/PRINCIPLES.md LP-4). `document:<ref>` sources rank as "document".
 SOURCE_ORDER = ("user-stated", "approved-inference", "document")
 SNAPSHOT_KEEP = 30
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
@@ -57,13 +59,20 @@ class UserError(Exception):
 # ---------------------------------------------------------------- helpers
 
 def kiseki_da_home() -> Path:
-    """Evaluate KISEKI_DA_HOME (or ~/.kiseki-da) on every call."""
+    """Evaluate KISEKI_DA_HOME (or ~/.kiseki-da) on every call.
+
+    installer/util.kiseki_home() applies the same rule; tests/test_state_home.py keeps the two identical.
+    """
     raw = os.environ.get("KISEKI_DA_HOME")
     return (Path(raw).expanduser() if raw else Path.home() / ".kiseki-da").resolve()
 
 
 def pa_home() -> Path:
-    """Backward-compatible function name; legacy PA_HOME is intentionally ignored."""
+    """Deprecated alias of kiseki_da_home() for code written against the old pa-harness name.
+
+    Legacy PA_HOME is intentionally ignored here; legacy_home_signal() reports it for migration only.
+    New code calls kiseki_da_home().
+    """
     return kiseki_da_home()
 
 
@@ -109,10 +118,6 @@ def redact(s: str) -> str:
     return s
 
 
-def dumps(obj) -> str:
-    return json.dumps(obj, ensure_ascii=False, default=str)
-
-
 def parse_ts(value) -> _dt.datetime | None:
     """ISO 8601 → aware datetime (naive values are taken as local time). None if unparsable."""
     if not isinstance(value, str):
@@ -150,81 +155,6 @@ def source_rank(source: str | None) -> int:
     return 2
 
 
-def _atomic_write(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.parent / f".{path.name}.{os.getpid()}.tmp"
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
-
-
-def _append_jsonl(path: Path, rec: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(dumps(rec) + "\n")
-
-
-def _lock(fd: int) -> bool:
-    """Take an exclusive advisory lock on `fd` (blocking). False when the platform has none."""
-    try:
-        if _fcntl is not None:
-            _fcntl.flock(fd, _fcntl.LOCK_EX)
-            return True
-        if _msvcrt is not None:
-            os.lseek(fd, 0, os.SEEK_SET)
-            _msvcrt.locking(fd, _msvcrt.LK_LOCK, 1)
-            return True
-    except OSError:
-        pass
-    return False
-
-
-def _unlock(fd: int) -> None:
-    try:
-        if _fcntl is not None:
-            _fcntl.flock(fd, _fcntl.LOCK_UN)
-        elif _msvcrt is not None:
-            os.lseek(fd, 0, os.SEEK_SET)
-            _msvcrt.locking(fd, _msvcrt.LK_UNLCK, 1)
-    except OSError:
-        pass
-
-
-@contextlib.contextmanager
-def _locked_append(path: Path) -> Iterator:
-    """Open `path` for appending and hold an exclusive lock on it for the block.
-
-    Concurrent hook processes of one session (parallel tool calls) share `session/<sid>.seq`;
-    the lock on the append-only file (its inode is never replaced) serialises
-    read-increment-write of the counter and the JSONL append. Best effort: without a usable
-    lock the block still runs.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "a", encoding="utf-8") as f:
-        locked = _lock(f.fileno())
-        try:
-            yield f
-            f.flush()
-        finally:
-            if locked:
-                _unlock(f.fileno())
-
-
-def _iter_jsonl(path: Path) -> Iterator[dict]:
-    if not path.exists():
-        return
-    with open(path, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rec = json.loads(line)
-            except ValueError:
-                continue
-            if isinstance(rec, dict):
-                yield rec
-
-
 def _safe_name(s: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]", "_", s) or "_"
 
@@ -234,164 +164,9 @@ def _num_suffix(s: str) -> int:
     return int(m.group(1)) if m else 0
 
 
-# ---------------------------------------------------------------- TOML emitter
-
-_BARE_KEY = re.compile(r"^[A-Za-z0-9_-]+$")
-
-
-def _toml_key(k: str) -> str:
-    return k if _BARE_KEY.match(k) else _toml_str(k)
-
-
-def _toml_str(s: str) -> str:
-    out = ['"']
-    for ch in s:
-        if ch == '"':
-            out.append('\\"')
-        elif ch == "\\":
-            out.append("\\\\")
-        elif ch == "\n":
-            out.append("\\n")
-        elif ch == "\r":
-            out.append("\\r")
-        elif ch == "\t":
-            out.append("\\t")
-        elif ch == "\b":
-            out.append("\\b")
-        elif ch == "\f":
-            out.append("\\f")
-        elif ord(ch) < 0x20 or ch == "\x7f":
-            out.append(f"\\u{ord(ch):04X}")
-        else:
-            out.append(ch)
-    out.append('"')
-    return "".join(out)
-
-
-def _toml_value(v) -> str:
-    if isinstance(v, bool):
-        return "true" if v else "false"
-    if isinstance(v, int):
-        return str(v)
-    if isinstance(v, float):
-        if v != v or v in (float("inf"), float("-inf")):
-            raise ValueError("non-finite float is not representable")
-        return repr(v)
-    if isinstance(v, _dt.datetime):
-        if v.tzinfo is None:  # TOML local date-time from a hand edit: local time, as parse_ts reads it
-            v = v.astimezone()
-        return v.isoformat()
-    if isinstance(v, _dt.date):
-        return v.isoformat()
-    if isinstance(v, _dt.time):
-        return v.isoformat()
-    if isinstance(v, str):
-        return _toml_str(v)
-    if isinstance(v, (list, tuple)):
-        return "[" + ", ".join(_toml_value(x) for x in v) + "]"
-    if isinstance(v, dict):
-        values = [f"{_toml_key(str(k))} = {_toml_value(value)}"
-                  for k, value in v.items() if value is not None]
-        return "{ " + ", ".join(values) + " }"
-    raise TypeError(f"unsupported TOML value: {type(v).__name__}")
-
-
 def emit_toml(data: dict) -> str:
-    """Minimal emitter: (a) top-level scalars, (b) one-level tables, (c) array tables.
-
-    Empty top-level lists are omitted (read_profile fills them back with []).
-    None values inside items are skipped.
-    """
-    scalars: list[tuple[str, object]] = []
-    tables: list[tuple[str, dict]] = []
-    arrays: list[tuple[str, list]] = []
-    for k, v in data.items():
-        if v is None:
-            continue
-        if isinstance(v, dict):
-            tables.append((k, v))
-        elif isinstance(v, list) and v and all(isinstance(x, dict) for x in v):
-            arrays.append((k, v))
-        elif isinstance(v, list) and not v:
-            if k not in SECTIONS:
-                scalars.append((k, v))
-        else:
-            scalars.append((k, v))
-    out: list[str] = []
-    for k, v in scalars:
-        out.append(f"{_toml_key(k)} = {_toml_value(v)}")
-    for k, tbl in tables:
-        if out:
-            out.append("")
-        out.append(f"[{_toml_key(k)}]")
-        for kk, vv in tbl.items():
-            if vv is None:
-                continue
-            out.append(f"{_toml_key(kk)} = {_toml_value(vv)}")
-    for k, items in arrays:
-        for item in items:
-            out.append("")
-            out.append(f"[[{_toml_key(k)}]]")
-            for kk, vv in item.items():
-                if vv is None:
-                    continue
-                out.append(f"{_toml_key(kk)} = {_toml_value(vv)}")
-    return "\n".join(out) + "\n"
-
-
-# ---------------------------------------------------------------- validation table
-# Compile required keys and types from core/schema/*.json; one cached load per process.
-
-_SCHEMA_FILES = {"profile": "profile", "event": "event", "candidate": "candidate", "task": "task-card"}
-
-
-def _schema_type(spec: dict):
-    types = {"string": str, "integer": int, "number": (int, float), "boolean": bool,
-             "object": dict, "array": list, "null": type(None)}
-    names = spec.get("type", [])
-    names = [names] if isinstance(names, str) else names
-    out = []
-    for name in names:
-        typ = types[name]
-        out.extend(typ if isinstance(typ, tuple) else (typ,))
-    if spec.get("format") in ("date", "date-time") and str in out:
-        out.append(_dt.date)
-    return out[0] if len(out) == 1 else tuple(out)
-
-
-def _schema_table(spec: dict) -> dict:
-    required = set(spec.get("required", []))
-    return {kind: {key: _schema_type(value) for key, value in spec.get("properties", {}).items()
-                   if "type" in value and (key in required) == (kind == "required")}
-            for kind in ("required", "optional")}
-
-
-@functools.lru_cache(maxsize=16)
-def _schema_tables(kind: str, root: str) -> tuple[dict, dict]:
-    # JSON files own required keys and types. Compile once per process, keeping hook I/O bounded.
-    path = Path(root) / "core/schema" / (_SCHEMA_FILES[kind] + ".schema.json")
-    schema = json.loads(path.read_text(encoding="utf-8"))
-    item = schema.get("$defs", {}).get("item" if kind == "profile" else "criterion", {})
-    return _schema_table(schema), _schema_table(item)
-
-
-def _check_obj(schema: dict, obj: dict, prefix: str, errors: list[str]) -> None:
-    for key, typ in schema["required"].items():
-        if key not in obj:
-            errors.append(f"{prefix}{key}: 必須キーがありません")
-        elif not _is_type(obj[key], typ):
-            errors.append(f"{prefix}{key}: 型が不正です（{type(obj[key]).__name__}）")
-    for key, typ in schema["optional"].items():
-        if key in obj and not _is_type(obj[key], typ):
-            errors.append(f"{prefix}{key}: 型が不正です（{type(obj[key]).__name__}）")
-
-
-def _is_type(value, typ) -> bool:
-    if typ is int:
-        return isinstance(value, int) and not isinstance(value, bool)
-    if isinstance(typ, tuple) and int in typ and float in typ:
-        return isinstance(value, (int, float)) and not isinstance(value, bool)
-    return isinstance(value, typ)
+    """Profile TOML. Empty section lists are omitted; read_profile fills them back with []."""
+    return _tomlemit.emit_toml(data, omit_empty=SECTIONS)
 
 
 # ---------------------------------------------------------------- Store

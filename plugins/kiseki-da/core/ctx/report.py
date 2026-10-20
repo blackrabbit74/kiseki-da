@@ -1,4 +1,4 @@
-"""report.py — weekly metrics (`week`) and quarterly audit (`audit`) over events.jsonl (INTERFACES.md §8).
+"""report.py — weekly metrics (`week`) and quarterly audit (`audit`) over events.jsonl.
 
 Both functions are side-effect free: they never write events or state.
 """
@@ -28,15 +28,17 @@ AUDIT_KEYS = (
     "file_count", "hooks_never_fired", "event_types_without_writer", "profile_items_never_hit",
     "duplicate_profile_texts", "policy_lines", "policy_tokens",
 )
-# Normalized hook → the event type it writes on every run (INTERFACES §8), in registration order.
+# Normalized hook → the event type it writes on every run, in registration order.
 HOOK_EVENT_TYPES = (
     ("session-start", "session_start"), ("user-input", "user_input"), ("pre-tool", "guard"), ("post-tool", "tool_call"),
     ("stop", "gate"), ("session-end", "session_end"),
 )
 POLICY_PATH = _store.REPO_ROOT / "core" / "policy" / "interaction.md"
 
-# INTERFACES §10 file-count exclusions: root-relative directories, any-depth directory names, root files.
-# Same rule as core/tests/test_limits.counted_files; duplicated because core/ctx must not import core.tests.
+# File-count exclusions under the plugin root: root-relative directories, any-depth names, root files.
+# core/tests/test_limits.runtime_files enforces the 60-file limit and only skips .git, __pycache__ and *.pyc;
+# the extra exclusions here name paths the shipped plugin does not contain, so both counts agree on a release
+# tree. Kept separate because core/ctx must not import core.tests.
 _EXCLUDED_ROOT_DIRS = frozenset({"build", ".claude", "acceptance", "docs/background"})
 _EXCLUDED_DIR_NAMES = frozenset({".git", "__pycache__"})
 _EXCLUDED_ROOT_FILES = frozenset({"HANDOFF.md", "BUILD_BRIEF.md", "INTERFACES.md", "PROMPT.md"})
@@ -68,7 +70,7 @@ def _stale_count(profile: dict, today: _dt.date) -> int:
 
 
 def week(store: Store) -> dict:
-    """Metrics for the last 7 days (judged by `ts`). Every key of INTERFACES §8 is always present."""
+    """Metrics for the last 7 days (judged by `ts`). Every key of WEEK_KEYS is always present."""
     now = _dt.datetime.now().astimezone()
     cutoff = now - _dt.timedelta(days=WEEK_DAYS)
     events = list(store.iter_events())
@@ -162,7 +164,7 @@ def week(store: Store) -> dict:
         "guard_ask": count("guard", decision="ask"),
         "workers": count("worker_dispatch"),
         "candidates_pending": len(store.candidates("pending")),
-        # approval{cid: null} is a direct `ctx remember` write, not a candidate (DECISIONS 2026-09-04)
+        # approval{cid: null} is a direct `ctx remember` write, not a candidate approval, so it is not counted here
         "candidates_approved": sum(1 for ev in recent if ev.get("type") == "approval"
                                    and ev.get("action") == "approve" and ev.get("cid") is not None),
         "candidates_rejected": count("approval", action="reject"),
@@ -174,7 +176,7 @@ def week(store: Store) -> dict:
 
 
 def _counted_files() -> list[str]:
-    """Repository files counted by INTERFACES §10 (sorted POSIX-relative paths); `.DS_Store` counts (DECISIONS A-3)."""
+    """Repository files counted against the file limit (sorted POSIX-relative paths); `.DS_Store` counts."""
     root = _store.REPO_ROOT
     out: list[str] = []
     for dirpath, dirnames, filenames in os.walk(root):
@@ -216,7 +218,7 @@ def _profile_items(profile: dict) -> list[tuple[str, dict]]:
 
 
 def audit(store: Store) -> dict:
-    """Quarterly audit (INTERFACES §8): structural facts over the repository, the last 30 days of events and
+    """Quarterly audit: structural facts over the repository, the last 30 days of events and
     the profile. Every key of AUDIT_KEYS is always present; reads only (no event, no file)."""
     recent = list(store.iter_events(since_days=AUDIT_DAYS))   # ts unparsable → not counted, as in week()
     fired = {ev.get("type") for ev in recent}

@@ -11,6 +11,7 @@ import subprocess
 import sys
 import sysconfig
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
@@ -940,6 +941,67 @@ def _check_live_update_platform(hosts, inventories, ownership, *, replacing, dry
                              "保守手順 docs/MAINTENANCE.md を確認してください。")
 
 
+def _interrupted_result(
+    tx: Transaction | None, plan: dict[str, Any], exc: KeyboardInterrupt,
+) -> tuple[int, dict[str, Any]]:
+    """Roll back after Ctrl+C and report an interrupted (or incompletely rolled back) operation."""
+    if tx is not None:
+        ok = tx.rollback(run_command, error=exc)
+        if not ok:
+            return 3, {**plan, "transaction": tx.id, "status": "rollback_incomplete",
+                       "journal": str(tx.journal_path), "rollback_errors": tx.data.get("rollback_errors", [])}
+    return 130, {**plan, "transaction": tx.id if tx else None, "status": "interrupted"}
+
+
+def _rolled_back_result(tx: Transaction, plan: dict[str, Any], exc: BaseException) -> tuple[int, dict[str, Any]]:
+    """Roll back a failed transaction and report whether the rollback completed."""
+    ok = tx.rollback(run_command, error=exc)
+    return (2 if ok else 3), {
+        **plan, "transaction": tx.id, "status": "rolled_back" if ok else "rollback_incomplete",
+        "error": str(exc), "journal": str(tx.journal_path),
+        "rollback_errors": tx.data.get("rollback_errors", []),
+    }
+
+
+@dataclass
+class _InstallRequest:
+    """Validated install inputs plus the facts read before any host probe."""
+
+    home: Path
+    hosts: list[str]
+    scope: str
+    project: Path | None
+    answers: dict[str, Any]
+    yes: bool
+    source: Path
+    host_security: str
+    import_legacy: bool
+    old: dict[str, Any]
+    source_info: dict[str, Any]
+    model_preview: dict[str, Any]
+    legacy_home: Path | None
+    old_version: str | None
+    new_version: str
+    replacing: bool
+    previous_hosts: list[str]
+    location_pointer: dict[str, Any]
+    restart_update: bool = False
+    local_source: bool = False
+    enable_plugin: bool = False
+
+
+@dataclass
+class _InstallHosts:
+    """What the host probes found; ``ownership`` is the same dict the plan shows."""
+
+    managers: dict[str, HostManager]
+    preflight: dict[str, Any]
+    inventories: dict[str, Any]
+    ownership: dict[str, dict[str, Any]]
+    prior_security_records: dict[str, Any]
+    security_refresh_hosts: list[str]
+
+
 def install(
     *,
     hosts: list[str],
@@ -957,6 +1019,32 @@ def install(
     local_source: bool = False,
     enable_plugin: bool = False,
 ) -> tuple[int, dict[str, Any]]:
+    req = _prepare_install(
+        hosts=hosts, scope=scope, project=project, answers=answers, yes=yes, source=source,
+        update_mode=update_mode, host_security=host_security, import_legacy=import_legacy,
+        restart_update=restart_update, local_source=local_source, enable_plugin=enable_plugin,
+    )
+    base_plan = _install_base_plan(req, update_mode)
+    if dry_run and not allow_host_probes:
+        return 0, {
+            **base_plan,
+            "host_preflight": {host: {"status": "deferred_to_execution"} for host in req.hosts},
+            "plugin_inventory": {host: {"status": "deferred_to_execution"} for host in req.hosts},
+            "note": "dry-runではhost CLI内部の書込も避けるためversion/feature/inventory probeを実行時まで延期します。",
+        }
+    probed = _probe_install_hosts(req, dry_run)
+    plan = _install_plan(base_plan, req, probed)
+    if dry_run:
+        return 0, plan
+    return _run_install_transaction(req, probed, plan)
+
+
+def _prepare_install(
+    *, hosts: list[str], scope: str, project: Path | None, answers: dict[str, Any], yes: bool,
+    source: Path, update_mode: bool, host_security: str, import_legacy: bool,
+    restart_update: bool, local_source: bool, enable_plugin: bool,
+) -> _InstallRequest:
+    """Validate the request and the source release before anything is probed or written."""
     home = kiseki_home()
     _validate_platform_home(home)
     hosts = expand_hosts(hosts)
@@ -989,211 +1077,307 @@ def install(
         raise InstallerError("--restart-updateには導入済み環境と異なるversionのソースが必要です。")
     if restart_update and not (home / "runtime" / old_version / "install.py").is_file():
         raise InstallerError("復元用の旧runtimeがありません。更新前に復旧してください。")
-    replacing = bool(update_mode or (old_version and old_version != new_version))
-    previous_hosts = [h for h in old.get("hosts", []) if h in HOSTS]
-    location_pointer = _location_pointer_plan(home, old)
+    return _InstallRequest(
+        home=home, hosts=hosts, scope=scope, project=project, answers=answers, yes=yes, source=source,
+        host_security=host_security, import_legacy=import_legacy, old=old, source_info=source_info,
+        model_preview=model_preview, legacy_home=legacy_home, old_version=old_version,
+        new_version=new_version,
+        replacing=bool(update_mode or (old_version and old_version != new_version)),
+        previous_hosts=[h for h in old.get("hosts", []) if h in HOSTS],
+        location_pointer=_location_pointer_plan(home, old),
+        restart_update=restart_update, local_source=local_source, enable_plugin=enable_plugin,
+    )
+
+
+def _install_base_plan(req: _InstallRequest, update_mode: bool) -> dict[str, Any]:
+    """Describe the install without touching host CLIs (what dry-run shows by default)."""
+    home, hosts, project = req.home, req.hosts, req.project
     base_plan = {
         "action": "update" if update_mode else "install",
         "home": str(home),
-        "version": new_version,
+        "version": req.new_version,
         "hosts": hosts,
-        "scope": scope,
+        "scope": req.scope,
         "project": str(project) if project else None,
-        "legacy_detected": legacy_home is not None,
+        "legacy_detected": req.legacy_home is not None,
         "legacy_adapters": _legacy_adapter_paths(),
-        "legacy_import": str(legacy_home) if import_legacy and legacy_home else None,
-        "writes": [str(home / "runtime" / new_version), str(home / "current.json"), str(home / "install.json"),
-                   str(home / "bin"), str(location_pointer["path"])],
-        "setup_answers": {key: answers[key] for key in ("identity", "persona") if key in answers},
-        "model_preview": model_preview,
-        "security_settings": host_security,
-        "restart_required": restart_update,
-        "enable_plugin": enable_plugin,
-        "local_source": local_source,
-        "security_changes": host_security_mod.preview(hosts) if host_security == "recommended" else [],
+        "legacy_import": str(req.legacy_home) if req.import_legacy and req.legacy_home else None,
+        "writes": [str(home / "runtime" / req.new_version), str(home / "current.json"), str(home / "install.json"),
+                   str(home / "bin"), str(req.location_pointer["path"])],
+        "setup_answers": {key: req.answers[key] for key in ("identity", "persona") if key in req.answers},
+        "model_preview": req.model_preview,
+        "security_settings": req.host_security,
+        "restart_required": req.restart_update,
+        "enable_plugin": req.enable_plugin,
+        "local_source": req.local_source,
+        "security_changes": host_security_mod.preview(hosts) if req.host_security == "recommended" else [],
         "limitations": (["Codex Appのproject scopeは公開betaではLocal環境限定です。管理Worktree/Cloudではactivateしません。"]
-                        if scope == "project" and "codex" in hosts else []),
+                        if req.scope == "project" and "codex" in hosts else []),
     }
-    if restart_update:
+    if req.restart_update:
         base_plan["limitations"].append("native managerがcacheを入れ替えます。適用後は両ホストで新規セッションを開始してください。")
-    if dry_run and not allow_host_probes:
-        return 0, {
-            **base_plan,
-            "host_preflight": {host: {"status": "deferred_to_execution"} for host in hosts},
-            "plugin_inventory": {host: {"status": "deferred_to_execution"} for host in hosts},
-            "note": "dry-runではhost CLI内部の書込も避けるためversion/feature/inventory probeを実行時まで延期します。",
-        }
+    return base_plan
 
+
+def _probe_install_hosts(req: _InstallRequest, dry_run: bool) -> _InstallHosts:
+    """Ask each host CLI for its version and inventory and decide what the installer owns."""
+    hosts = req.hosts
     managers = {host: HostManager(host) for host in hosts}
     host_info = {host: managers[host].preflight() for host in hosts}
     initial_inventories = {host: managers[host].inventory() for host in hosts}
     selected_ownership = {
-        host: _host_ownership(old, previous_hosts, host, initial_inventories[host], new_version)
+        host: _host_ownership(req.old, req.previous_hosts, host, initial_inventories[host], req.new_version)
         for host in hosts
     }
-    if not (restart_update and enable_plugin):
+    if not (req.restart_update and req.enable_plugin):
         for host in hosts:
-            if replacing and initial_inventories[host].plugin and not initial_inventories[host].plugin_enabled:
+            if req.replacing and initial_inventories[host].plugin and not initial_inventories[host].plugin_enabled:
                 raise InstallerError(f"{host} pluginは無効です。再有効化する場合は--restart-update --enable-pluginを指定してください。")
     # Reject unsupported exchange before creating a mutation transaction.
     _check_live_update_platform(hosts, initial_inventories, selected_ownership,
-                                replacing=replacing, dry_run=dry_run, restart_update=restart_update)
+                                replacing=req.replacing, dry_run=dry_run, restart_update=req.restart_update)
+    old = req.old
     prior_security_records = dict(old.get("security_records", {})) if isinstance(old.get("security_records"), dict) else {}
     security_refresh_hosts = [host for host in hosts
-                              if replacing and host in previous_hosts and host in prior_security_records]
+                              if req.replacing and host in req.previous_hosts and host in prior_security_records]
     if security_refresh_hosts:
         host_security_mod.validate_restore(prior_security_records, security_refresh_hosts)
-    plan = {
+    return _InstallHosts(
+        managers=managers, preflight=host_info, inventories=initial_inventories, ownership=selected_ownership,
+        prior_security_records=prior_security_records, security_refresh_hosts=security_refresh_hosts,
+    )
+
+
+def _install_plan(base_plan: dict[str, Any], req: _InstallRequest, probed: _InstallHosts) -> dict[str, Any]:
+    """Extend the base plan with host probe results and the per-host actions."""
+    hosts = req.hosts
+    return {
         **base_plan,
-        "host_preflight": host_info,
-        "plugin_inventory": {host: _inventory_summary(initial_inventories[host]) for host in hosts},
-        "host_ownership": selected_ownership,
+        "host_preflight": probed.preflight,
+        "plugin_inventory": {host: _inventory_summary(probed.inventories[host]) for host in hosts},
+        "host_ownership": probed.ownership,
         "host_actions": {
-            host: (["対象pluginのcacheと登録情報をバックアップし、native managerで更新"] if restart_update
-                   else _install_action_plan(initial_inventories[host], selected_ownership[host], replacing))
+            host: (["対象pluginのcacheと登録情報をバックアップし、native managerで更新"] if req.restart_update
+                   else _install_action_plan(probed.inventories[host], probed.ownership[host], req.replacing))
             for host in hosts
         },
     }
-    if dry_run:
-        return 0, plan
 
-    preview_results: list[dict] = []
+
+def _run_install_transaction(
+    req: _InstallRequest, probed: _InstallHosts, plan: dict[str, Any],
+) -> tuple[int, dict[str, Any]]:
+    """Open the transaction, apply the install, and roll back on any failure."""
     tx: Transaction | None = None
     try:
-        tx = Transaction(home, plan["action"])
-        if _metadata(home) != old:
-            raise InstallerError("確認後にinstall metadataが変更されました。再度planを確認してください。")
-        for host in hosts:
-            if _inventory_summary(managers[host].inventory()) != _inventory_summary(initial_inventories[host]):
-                raise InstallerError(f"確認後に{host} plugin inventoryが変更されました。再実行してください。")
-        if host_security == "recommended" and host_security_mod.preview(hosts) != plan["security_changes"]:
-            raise InstallerError("確認後にhost security設定が変更されました。再度差分を確認してください。")
-        if model_preview["enabled"]:
-            print("キャラクター設定を選択したモデル提供者へ送信してプレビューします。応答はKiseki DAのstateへ保存しません。")
-            persona_candidate = answers.get("persona") if isinstance(answers.get("persona"), dict) else {}
-            preview_results = _run_model_preview(source, persona_candidate, model_preview["hosts"])
-            for host in hosts:
-                if _inventory_summary(managers[host].inventory()) != _inventory_summary(initial_inventories[host]):
-                    raise InstallerError(f"プレビュー中に{host} plugin inventoryが変更されました。再実行してください。")
-            if host_security == "recommended" and host_security_mod.preview(hosts) != plan["security_changes"]:
-                raise InstallerError("プレビュー中にhost security設定が変更されました。再度差分を確認してください。")
-        if import_legacy and legacy_home is not None:
-            _import_legacy(tx, legacy_home, home)
-        runtime = home / "runtime" / new_version
-        with tempfile.TemporaryDirectory(prefix="kiseki-da-runtime-") as raw:
-            staged = Path(raw) / "runtime"
-            _runtime_source(source, staged)
-            tx.replace_tree(staged, runtime)
-        launchers, launcher_records = _write_launchers(tx, home, runtime, old)
-        tx.write_json(home / "current.json", {
-            "schema": 1,
-            "version": new_version,
-            "runtime": str(runtime),
-            "updated_at": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
-        }, mode=0o600)
-        _configure_runtime(tx, runtime, home, answers=answers, yes=yes, scope=scope, project=project,
-                           hosts=hosts)
-        # Runtime setup and legacy import intentionally use their own atomic
-        # writers. Bind their resulting hashes to this transaction before any
-        # external manager work so rollback never overwrites a concurrent edit.
-        tx.capture_applied()
-        if "codex" in hosts:
-            tx.remove(home / "install" / "codex-hook-trust.json")
-        security_records = dict(prior_security_records)
-        for host in hosts:
-            tx.track_external_mutable(host_security_mod.config_path(host))
-        for host in security_refresh_hosts:
-            host_security_mod.restore(tx, security_records, host)
-            # The next apply must capture the new post-manager file as its
-            # original.  Preserve the old artifacts through Transaction so an
-            # update failure can restore them.
-            tx.remove(home / "security-backups" / host / "record.json")
-            tx.remove(home / "security-backups" / host / "original")
-            security_records.pop(host, None)
-        for host in hosts:
-            host_replacing = replacing and host in previous_hosts
-            selected_ownership[host] = _manager_steps(
-                tx,
-                managers[host],
-                replacing=host_replacing,
-                old_version=old_version,
-                new_version=new_version,
-                inventory=initial_inventories[host],
-                ownership=selected_ownership[host],
-                source=runtime,
-                restart_update=restart_update,
-                local_source=local_source,
-                enable_plugin=enable_plugin,
-            )
-        _smoke_installed_plugins(selected_ownership, new_version)
-        # Native managers may update their settings files.  Apply the optional
-        # security baseline only after they are finished so its ownership hash
-        # describes the actual final file.
-        security_apply_hosts = hosts if host_security == "recommended" else security_refresh_hosts
-        if security_apply_hosts:
-            for host in security_apply_hosts:
-                security_records[host] = host_security_mod.apply(tx, home, host)
-        pointer_record = _write_location_pointer(tx, location_pointer)
-        combined_hosts = list(dict.fromkeys([*previous_hosts, *hosts]))
-        prior_ownership = old.get("host_ownership") if isinstance(old.get("host_ownership"), dict) else {}
-        host_ownership = {host: prior_ownership.get(host, {"marketplace": True, "plugin": True})
-                          for host in previous_hosts if host not in hosts}
-        host_ownership.update(selected_ownership)
-        registry = read_json(home / "projects.json", {})
-        live_scope = registry.get("mode", scope) if isinstance(registry, dict) else scope
-        registry_rows = registry.get("projects", []) if isinstance(registry, dict) else []
-        projects = [str(row["path"]) for row in registry_rows
-                    if isinstance(row, dict) and isinstance(row.get("path"), str)]
-        metadata = {
-            "schema": 1,
-            "installed": True,
-            "product": PRODUCT,
-            "version": new_version,
-            "hosts": combined_hosts,
-            "scope": live_scope,
-            "projects": projects,
-            "source": f"blackrabbit74/kiseki-da@v{new_version}",
-            "security_settings": "recommended" if security_records else "preserve",
-            "security_records": security_records,
-            "installed_at": old.get("installed_at") or dt.datetime.now().astimezone().isoformat(timespec="seconds"),
-            "updated_at": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
-            "legacy_detected": plan["legacy_detected"],
-            "launchers": launcher_records,
-            "management_launchers": [{"path": str(path.resolve()), "sha256": sha256_file(path)}
-                                     for path in launchers],
-            "location_pointer": pointer_record,
-            "host_ownership": host_ownership,
-        }
-        tx.write_json(home / "install.json", metadata, mode=0o600)
-        if not (runtime / "VERSION").is_file() or (runtime / "VERSION").read_text(encoding="utf-8").strip() != new_version:
-            raise InstallerError("runtime version検証に失敗しました。")
-        _smoke_runtime(runtime, hosts)
-        tx.commit(version=new_version, hosts=combined_hosts, launchers=[str(p) for p in launchers])
-        return 0, {**plan, "transaction": tx.id, "launchers": [str(p) for p in launchers],
-                   "status": "installed", "preview_results": preview_results}
+        tx = Transaction(req.home, plan["action"])
+        return _apply_install(tx, req, probed, plan)
     except KeyboardInterrupt as exc:
-        if tx is not None:
-            ok = tx.rollback(run_command, error=exc)
-            if not ok:
-                return 3, {**plan, "transaction": tx.id, "status": "rollback_incomplete",
-                           "journal": str(tx.journal_path), "rollback_errors": tx.data.get("rollback_errors", [])}
-        return 130, {**plan, "transaction": tx.id if tx else None, "status": "interrupted"}
+        return _interrupted_result(tx, plan, exc)
     except BaseException as exc:  # noqa: BLE001 - operation must roll back any post-begin failure
         if tx is None:
             if isinstance(exc, InstallerError):
                 raise
             raise InstallerError(f"install開始前に失敗しました: {type(exc).__name__}: {exc}") from None
-        ok = tx.rollback(run_command, error=exc)
-        return (2 if ok else 3), {
-            **plan, "transaction": tx.id, "status": "rolled_back" if ok else "rollback_incomplete",
-            "error": str(exc), "journal": str(tx.journal_path),
-            "rollback_errors": tx.data.get("rollback_errors", []),
-        }
+        return _rolled_back_result(tx, plan, exc)
+
+
+def _apply_install(
+    tx: Transaction, req: _InstallRequest, probed: _InstallHosts, plan: dict[str, Any],
+) -> tuple[int, dict[str, Any]]:
+    """Run every install stage inside the open transaction and commit it."""
+    home, hosts, new_version = req.home, req.hosts, req.new_version
+    _confirm_install_inputs_unchanged(req, probed, plan)
+    preview_results = _run_consented_preview(req, probed, plan)
+    runtime, launchers, launcher_records = _install_runtime_files(tx, req)
+    security_records = _restore_security_for_refresh(tx, req, probed)
+    _install_host_plugins(tx, req, probed, runtime)
+    # Native managers may update their settings files.  Apply the optional
+    # security baseline only after they are finished so its ownership hash
+    # describes the actual final file.
+    security_apply_hosts = hosts if req.host_security == "recommended" else probed.security_refresh_hosts
+    if security_apply_hosts:
+        for host in security_apply_hosts:
+            security_records[host] = host_security_mod.apply(tx, home, host)
+    pointer_record = _write_location_pointer(tx, req.location_pointer)
+    metadata = _install_metadata(req, probed, plan, security_records, launchers, launcher_records, pointer_record)
+    tx.write_json(home / "install.json", metadata, mode=0o600)
+    if not (runtime / "VERSION").is_file() or (runtime / "VERSION").read_text(encoding="utf-8").strip() != new_version:
+        raise InstallerError("runtime version検証に失敗しました。")
+    _smoke_runtime(runtime, hosts)
+    tx.commit(version=new_version, hosts=metadata["hosts"], launchers=[str(p) for p in launchers])
+    return 0, {**plan, "transaction": tx.id, "launchers": [str(p) for p in launchers],
+               "status": "installed", "preview_results": preview_results}
+
+
+def _confirm_install_inputs_unchanged(req: _InstallRequest, probed: _InstallHosts, plan: dict[str, Any]) -> None:
+    """Stop if install metadata, plugin inventories or host security changed since the plan was shown."""
+    if _metadata(req.home) != req.old:
+        raise InstallerError("確認後にinstall metadataが変更されました。再度planを確認してください。")
+    for host in req.hosts:
+        if _inventory_summary(probed.managers[host].inventory()) != _inventory_summary(probed.inventories[host]):
+            raise InstallerError(f"確認後に{host} plugin inventoryが変更されました。再実行してください。")
+    if req.host_security == "recommended" and host_security_mod.preview(req.hosts) != plan["security_changes"]:
+        raise InstallerError("確認後にhost security設定が変更されました。再度差分を確認してください。")
+
+
+def _run_consented_preview(req: _InstallRequest, probed: _InstallHosts, plan: dict[str, Any]) -> list[dict]:
+    """Run the model preview the user opted into, then confirm it changed no host state."""
+    if not req.model_preview["enabled"]:
+        return []
+    print("キャラクター設定を選択したモデル提供者へ送信してプレビューします。応答はKiseki DAのstateへ保存しません。")
+    answers = req.answers
+    persona_candidate = answers.get("persona") if isinstance(answers.get("persona"), dict) else {}
+    preview_results = _run_model_preview(req.source, persona_candidate, req.model_preview["hosts"])
+    for host in req.hosts:
+        if _inventory_summary(probed.managers[host].inventory()) != _inventory_summary(probed.inventories[host]):
+            raise InstallerError(f"プレビュー中に{host} plugin inventoryが変更されました。再実行してください。")
+    if req.host_security == "recommended" and host_security_mod.preview(req.hosts) != plan["security_changes"]:
+        raise InstallerError("プレビュー中にhost security設定が変更されました。再度差分を確認してください。")
+    return preview_results
+
+
+def _install_runtime_files(tx: Transaction, req: _InstallRequest) -> tuple[Path, list[Path], list[dict]]:
+    """Copy the runtime, write launchers and current.json, and apply setup answers."""
+    home, new_version = req.home, req.new_version
+    if req.import_legacy and req.legacy_home is not None:
+        _import_legacy(tx, req.legacy_home, home)
+    runtime = home / "runtime" / new_version
+    with tempfile.TemporaryDirectory(prefix="kiseki-da-runtime-") as raw:
+        staged = Path(raw) / "runtime"
+        _runtime_source(req.source, staged)
+        tx.replace_tree(staged, runtime)
+    launchers, launcher_records = _write_launchers(tx, home, runtime, req.old)
+    tx.write_json(home / "current.json", {
+        "schema": 1,
+        "version": new_version,
+        "runtime": str(runtime),
+        "updated_at": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
+    }, mode=0o600)
+    _configure_runtime(tx, runtime, home, answers=req.answers, yes=req.yes, scope=req.scope, project=req.project,
+                       hosts=req.hosts)
+    # Runtime setup and legacy import intentionally use their own atomic
+    # writers. Bind their resulting hashes to this transaction before any
+    # external manager work so rollback never overwrites a concurrent edit.
+    tx.capture_applied()
+    return runtime, launchers, launcher_records
+
+
+def _restore_security_for_refresh(tx: Transaction, req: _InstallRequest, probed: _InstallHosts) -> dict[str, Any]:
+    """Drop the Codex trust record and undo security baselines that this update re-applies."""
+    home = req.home
+    if "codex" in req.hosts:
+        tx.remove(home / "install" / "codex-hook-trust.json")
+    security_records = dict(probed.prior_security_records)
+    for host in req.hosts:
+        tx.track_external_mutable(host_security_mod.config_path(host))
+    for host in probed.security_refresh_hosts:
+        host_security_mod.restore(tx, security_records, host)
+        # The next apply must capture the new post-manager file as its
+        # original.  Preserve the old artifacts through Transaction so an
+        # update failure can restore them.
+        tx.remove(home / "security-backups" / host / "record.json")
+        tx.remove(home / "security-backups" / host / "original")
+        security_records.pop(host, None)
+    return security_records
+
+
+def _install_host_plugins(tx: Transaction, req: _InstallRequest, probed: _InstallHosts, runtime: Path) -> None:
+    """Register marketplace and plugin with each host manager, then smoke-test the installed hooks."""
+    selected_ownership = probed.ownership
+    for host in req.hosts:
+        host_replacing = req.replacing and host in req.previous_hosts
+        selected_ownership[host] = _manager_steps(
+            tx,
+            probed.managers[host],
+            replacing=host_replacing,
+            old_version=req.old_version,
+            new_version=req.new_version,
+            inventory=probed.inventories[host],
+            ownership=selected_ownership[host],
+            source=runtime,
+            restart_update=req.restart_update,
+            local_source=req.local_source,
+            enable_plugin=req.enable_plugin,
+        )
+    _smoke_installed_plugins(selected_ownership, req.new_version)
+
+
+def _install_metadata(
+    req: _InstallRequest, probed: _InstallHosts, plan: dict[str, Any], security_records: dict[str, Any],
+    launchers: list[Path], launcher_records: list[dict], pointer_record: dict[str, Any],
+) -> dict[str, Any]:
+    """Build the install.json record, keeping ownership of hosts this run did not touch."""
+    home, hosts, old, previous_hosts = req.home, req.hosts, req.old, req.previous_hosts
+    combined_hosts = list(dict.fromkeys([*previous_hosts, *hosts]))
+    prior_ownership = old.get("host_ownership") if isinstance(old.get("host_ownership"), dict) else {}
+    host_ownership = {host: prior_ownership.get(host, {"marketplace": True, "plugin": True})
+                      for host in previous_hosts if host not in hosts}
+    host_ownership.update(probed.ownership)
+    registry = read_json(home / "projects.json", {})
+    live_scope = registry.get("mode", req.scope) if isinstance(registry, dict) else req.scope
+    registry_rows = registry.get("projects", []) if isinstance(registry, dict) else []
+    projects = [str(row["path"]) for row in registry_rows
+                if isinstance(row, dict) and isinstance(row.get("path"), str)]
+    return {
+        "schema": 1,
+        "installed": True,
+        "product": PRODUCT,
+        "version": req.new_version,
+        "hosts": combined_hosts,
+        "scope": live_scope,
+        "projects": projects,
+        "source": f"blackrabbit74/kiseki-da@v{req.new_version}",
+        "security_settings": "recommended" if security_records else "preserve",
+        "security_records": security_records,
+        "installed_at": old.get("installed_at") or dt.datetime.now().astimezone().isoformat(timespec="seconds"),
+        "updated_at": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
+        "legacy_detected": plan["legacy_detected"],
+        "launchers": launcher_records,
+        "management_launchers": [{"path": str(path.resolve()), "sha256": sha256_file(path)}
+                                 for path in launchers],
+        "location_pointer": pointer_record,
+        "host_ownership": host_ownership,
+    }
+
+
+@dataclass
+class _UninstallRequest:
+    """Validated uninstall selection plus the records needed to undo the install."""
+
+    home: Path
+    old: dict[str, Any]
+    selected: list[str]
+    remaining: list[str]
+    security_records: dict[str, Any]
+    ownership_records: dict[str, Any]
+    launcher_records: list[dict]
+    owned_pointer: Path | None
 
 
 def uninstall(
     *, hosts: list[str] | None, dry_run: bool, allow_host_probes: bool = False,
 ) -> tuple[int, dict[str, Any]]:
+    req = _prepare_uninstall(hosts)
+    plan = {
+        "action": "uninstall",
+        "home": str(req.home),
+        "hosts": req.selected,
+        "remaining_hosts": req.remaining,
+        "state_preserved": True,
+        "host_preflight": {host: {"status": "deferred_to_execution"} for host in req.selected},
+        "note": "dry-runではhost CLI内部の書込も避けるためversion/feature/inventory probeを実行時まで延期します。",
+    }
+    if dry_run and not allow_host_probes:
+        return 0, plan
+    managers, inventories = _probe_uninstall_hosts(req, plan)
+    if dry_run:
+        return 0, plan
+    return _run_uninstall_transaction(req, plan, managers, inventories)
+
+
+def _prepare_uninstall(hosts: list[str] | None) -> _UninstallRequest:
+    """Resolve which hosts to remove and refuse if owned files were changed after install."""
     home = kiseki_home()
     old = _metadata(home)
     if not old.get("installed"):
@@ -1216,17 +1400,23 @@ def uninstall(
                     or sha256_file(path) != item.get("sha256")):
                 raise InstallerError(f"launcherは導入後に変更されています。自動削除しません: {path}")
         owned_pointer = _validate_owned_pointer(old.get("location_pointer"))
-    plan = {
-        "action": "uninstall",
-        "home": str(home),
-        "hosts": selected,
-        "remaining_hosts": remaining,
-        "state_preserved": True,
-        "host_preflight": {host: {"status": "deferred_to_execution"} for host in selected},
-        "note": "dry-runではhost CLI内部の書込も避けるためversion/feature/inventory probeを実行時まで延期します。",
-    }
-    if dry_run and not allow_host_probes:
-        return 0, plan
+    return _UninstallRequest(
+        home=home, old=old, selected=selected, remaining=remaining, security_records=security_records,
+        ownership_records=ownership_records, launcher_records=launcher_records, owned_pointer=owned_pointer,
+    )
+
+
+def _recorded_ownership(ownership_records: dict[str, Any], host: str) -> dict[str, Any]:
+    """Return the host's ownership record, treating a missing one as fully installer-owned."""
+    ownership = ownership_records.get(host)
+    if not isinstance(ownership, dict):
+        ownership = {"marketplace": True, "plugin": True}
+    return ownership
+
+
+def _probe_uninstall_hosts(req: _UninstallRequest, plan: dict[str, Any]) -> tuple[dict[str, HostManager], dict]:
+    """Probe each selected host, add inventories and planned actions to the plan, and return them."""
+    selected = req.selected
     managers = {host: HostManager(host) for host in selected}
     host_info = {host: managers[host].preflight() for host in selected}
     plan["host_preflight"] = host_info
@@ -1235,97 +1425,109 @@ def uninstall(
     plan["plugin_inventory"] = {host: _inventory_summary(value) for host, value in inventories.items()}
     plan["host_actions"] = {}
     for host, inventory in inventories.items():
-        ownership = ownership_records.get(host)
-        if not isinstance(ownership, dict):
-            ownership = {"marketplace": True, "plugin": True}
+        ownership = _recorded_ownership(req.ownership_records, host)
         if (inventory.marketplace and ownership.get("marketplace") is True
                 and not _same_owned_source(ownership.get("marketplace_fingerprint"),
-                                           inventory.marketplace_fingerprint, old.get("version"))):
+                                           inventory.marketplace_fingerprint, req.old.get("version"))):
             raise InstallerError(f"{host} marketplaceの供給元/refが導入時記録と一致しません。自動削除しません。")
         actions = []
         actions.append("owned pluginを削除" if inventory.plugin and ownership.get("plugin") else "pluginを保持/対象なし")
         actions.append("owned marketplaceを削除" if inventory.marketplace and ownership.get("marketplace")
                        else "marketplaceを保持/対象なし")
         plan["host_actions"][host] = actions
-    if dry_run:
-        return 0, plan
+    return managers, inventories
+
+
+def _run_uninstall_transaction(
+    req: _UninstallRequest, plan: dict[str, Any], managers: dict[str, HostManager], inventories: dict,
+) -> tuple[int, dict[str, Any]]:
+    """Open the transaction, apply the uninstall, and roll back on any failure."""
     tx: Transaction | None = None
     try:
-        tx = Transaction(home, "uninstall")
-        if _metadata(home) != old:
-            raise InstallerError("確認後にinstall metadataが変更されました。再度planを確認してください。")
-        for host in selected:
-            if _inventory_summary(managers[host].inventory()) != _inventory_summary(inventories[host]):
-                raise InstallerError(f"確認後に{host} plugin inventoryが変更されました。再実行してください。")
-        old_version = str(old.get("version", VERSION))
-        for host in selected:
-            manager = managers[host]
-            ownership = ownership_records.get(host)
-            if not isinstance(ownership, dict):
-                ownership = {"marketplace": True, "plugin": True}
-            tx.track_external_mutable(host_security_mod.config_path(host))
-            # Restore the post-manager/pre-security snapshot first.  Claude's
-            # plugin removal can then remove its own settings entry without a
-            # later whole-file security restore reintroducing it.
-            host_security_mod.restore(tx, security_records, host)
-            inventory = inventories[host]
-            if inventory.plugin and ownership.get("plugin") is True:
-                do, undo = manager.plugin_remove()
-                tx.external(do, undo, manager.run)
-            if inventory.marketplace and ownership.get("marketplace") is True:
-                do, undo = manager.marketplace_remove(old_version=old_version)
-                tx.external(do, undo, manager.run)
-            after = manager.inventory()
-            if ownership.get("plugin") is True and after.plugin:
-                raise InstallerError(f"{host} pluginの削除を確認できません。")
-            if ownership.get("marketplace") is True and after.marketplace:
-                raise InstallerError(f"{host} marketplaceの削除を確認できません。")
-            if host in security_records:
-                tx.remove(home / "security-backups" / host / "record.json")
-                tx.remove(home / "security-backups" / host / "original")
-            security_records.pop(host, None)
-            if host == "codex":
-                tx.remove(home / "install" / "codex-hook-trust.json")
-        metadata = dict(old)
-        metadata["hosts"] = remaining
-        metadata["installed"] = bool(remaining)
-        metadata["security_records"] = security_records
-        metadata["security_settings"] = "recommended" if security_records else "preserve"
-        metadata["host_ownership"] = {host: record for host, record in ownership_records.items()
-                                      if host in remaining}
-        metadata["updated_at"] = dt.datetime.now().astimezone().isoformat(timespec="seconds")
-        tx.write_json(home / "install.json", metadata, mode=0o600)
-        if not remaining:
-            for item in launcher_records:
-                path = Path(str(item.get("path", "")))
-                if path.is_file():
-                    tx.remove_external(path)
-            if owned_pointer is not None and owned_pointer.is_file():
-                tx.remove_external(owned_pointer)
-            tx.remove(home / "current.json")
-            tx.remove(home / "runtime")
-            for name in ("kiseki-da", "kiseki-da.py", "kiseki-da.cmd"):
-                tx.remove(home / "bin" / name)
-        tx.commit(hosts=remaining, state_preserved=True)
-        return 0, {**plan, "transaction": tx.id, "status": "uninstalled" if not remaining else "partially_uninstalled"}
+        tx = Transaction(req.home, "uninstall")
+        return _apply_uninstall(tx, req, plan, managers, inventories)
     except KeyboardInterrupt as exc:
-        if tx is not None:
-            ok = tx.rollback(run_command, error=exc)
-            if not ok:
-                return 3, {**plan, "transaction": tx.id, "status": "rollback_incomplete",
-                           "journal": str(tx.journal_path), "rollback_errors": tx.data.get("rollback_errors", [])}
-        return 130, {**plan, "transaction": tx.id if tx else None, "status": "interrupted"}
+        return _interrupted_result(tx, plan, exc)
     except BaseException as exc:  # noqa: BLE001
         if tx is None:
             if isinstance(exc, InstallerError):
                 raise
             raise InstallerError(str(exc)) from None
-        ok = tx.rollback(run_command, error=exc)
-        return (2 if ok else 3), {
-            **plan, "transaction": tx.id, "status": "rolled_back" if ok else "rollback_incomplete",
-            "error": str(exc), "journal": str(tx.journal_path),
-            "rollback_errors": tx.data.get("rollback_errors", []),
-        }
+        return _rolled_back_result(tx, plan, exc)
+
+
+def _apply_uninstall(
+    tx: Transaction, req: _UninstallRequest, plan: dict[str, Any],
+    managers: dict[str, HostManager], inventories: dict,
+) -> tuple[int, dict[str, Any]]:
+    """Run every uninstall stage inside the open transaction and commit it."""
+    home, remaining = req.home, req.remaining
+    if _metadata(home) != req.old:
+        raise InstallerError("確認後にinstall metadataが変更されました。再度planを確認してください。")
+    for host in req.selected:
+        if _inventory_summary(managers[host].inventory()) != _inventory_summary(inventories[host]):
+            raise InstallerError(f"確認後に{host} plugin inventoryが変更されました。再実行してください。")
+    old_version = str(req.old.get("version", VERSION))
+    for host in req.selected:
+        _uninstall_host(tx, req, host, managers[host], inventories[host], old_version)
+    metadata = dict(req.old)
+    metadata["hosts"] = remaining
+    metadata["installed"] = bool(remaining)
+    metadata["security_records"] = req.security_records
+    metadata["security_settings"] = "recommended" if req.security_records else "preserve"
+    metadata["host_ownership"] = {host: record for host, record in req.ownership_records.items()
+                                  if host in remaining}
+    metadata["updated_at"] = dt.datetime.now().astimezone().isoformat(timespec="seconds")
+    tx.write_json(home / "install.json", metadata, mode=0o600)
+    if not remaining:
+        _remove_runtime_files(tx, req)
+    tx.commit(hosts=remaining, state_preserved=True)
+    return 0, {**plan, "transaction": tx.id, "status": "uninstalled" if not remaining else "partially_uninstalled"}
+
+
+def _uninstall_host(
+    tx: Transaction, req: _UninstallRequest, host: str, manager: HostManager, inventory, old_version: str,
+) -> None:
+    """Restore the host's security settings, remove owned plugin/marketplace, and verify removal."""
+    home, security_records = req.home, req.security_records
+    ownership = _recorded_ownership(req.ownership_records, host)
+    tx.track_external_mutable(host_security_mod.config_path(host))
+    # Restore the post-manager/pre-security snapshot first.  Claude's
+    # plugin removal can then remove its own settings entry without a
+    # later whole-file security restore reintroducing it.
+    host_security_mod.restore(tx, security_records, host)
+    if inventory.plugin and ownership.get("plugin") is True:
+        do, undo = manager.plugin_remove()
+        tx.external(do, undo, manager.run)
+    if inventory.marketplace and ownership.get("marketplace") is True:
+        do, undo = manager.marketplace_remove(old_version=old_version)
+        tx.external(do, undo, manager.run)
+    after = manager.inventory()
+    if ownership.get("plugin") is True and after.plugin:
+        raise InstallerError(f"{host} pluginの削除を確認できません。")
+    if ownership.get("marketplace") is True and after.marketplace:
+        raise InstallerError(f"{host} marketplaceの削除を確認できません。")
+    if host in security_records:
+        tx.remove(home / "security-backups" / host / "record.json")
+        tx.remove(home / "security-backups" / host / "original")
+    security_records.pop(host, None)
+    if host == "codex":
+        tx.remove(home / "install" / "codex-hook-trust.json")
+
+
+def _remove_runtime_files(tx: Transaction, req: _UninstallRequest) -> None:
+    """After the last host is gone, remove launchers, the owned pointer, and the runtime."""
+    home = req.home
+    for item in req.launcher_records:
+        path = Path(str(item.get("path", "")))
+        if path.is_file():
+            tx.remove_external(path)
+    if req.owned_pointer is not None and req.owned_pointer.is_file():
+        tx.remove_external(req.owned_pointer)
+    tx.remove(home / "current.json")
+    tx.remove(home / "runtime")
+    for name in ("kiseki-da", "kiseki-da.py", "kiseki-da.cmd"):
+        tx.remove(home / "bin" / name)
 
 
 def doctor() -> tuple[int, dict[str, Any]]:
@@ -1333,123 +1535,30 @@ def doctor() -> tuple[int, dict[str, Any]]:
     metadata = _metadata(home)
     checks: list[dict[str, Any]] = []
     smoke_targets: dict[str, dict[str, Any]] = {}
-
-    def add(name: str, status: str, detail: str) -> None:
-        checks.append({"name": name, "status": status, "detail": detail})
-
-    try:
-        _validate_platform_home(home)
-    except InstallerError as exc:
-        add("state-permissions", "error", str(exc))
-    else:
-        add("state-permissions", "ok", "state root/parent access policy")
-
-    if platform.system() == "Linux" and (os.environ.get("WSL_DISTRO_NAME") or "microsoft" in platform.release().casefold()):
-        parts = home.parts
-        if len(parts) >= 3 and parts[1] == "mnt" and len(parts[2]) == 1:
-            add("wsl-home", "error", "WSLでは/mnt/<drive>配下をKISEKI_DA_HOMEにできません")
+    _check_state_location(home, checks)
     pointer = read_json(home / "current.json", {})
     if not metadata.get("installed") or not isinstance(pointer, dict) or not pointer.get("runtime"):
-        add("installation", "error", "インストールされていません")
+        _add_check(checks, "installation", "error", "インストールされていません")
     else:
-        runtime = Path(pointer["runtime"])
-        version_file = runtime / "VERSION"
-        if runtime.is_dir() and version_file.is_file() and version_file.read_text(encoding="utf-8").strip() == metadata.get("version"):
-            add("runtime", "ok", str(metadata.get("version")))
-        else:
-            add("runtime", "error", "current pointerまたはversionが不整合です")
-        for name in ("kiseki-da.py", "kiseki-da", "kiseki-da.cmd"):
-            launcher = home / "bin" / name
-            add(f"launcher:{name}", "ok" if launcher.is_file() and not launcher.is_symlink() else "error", str(launcher))
-        for item in metadata.get("launchers", []):
-            if not isinstance(item, dict):
-                continue
-            path = Path(str(item.get("path", "")))
-            valid = (item.get("kind") == "file" and path.is_file() and not path.is_symlink()
-                     and sha256_file(path) == item.get("sha256"))
-            add("launcher:PATH", "ok" if valid and shutil.which("kiseki-da") else "notice",
-                str(path) if valid else f"不整合: {path}")
-        pointer_record = metadata.get("location_pointer")
-        pointer_ok = False
-        pointer_detail = "記録がありません"
-        if isinstance(pointer_record, dict) and isinstance(pointer_record.get("path"), str):
-            location = Path(pointer_record["path"])
-            try:
-                private_mode = os.name == "nt" or not bool(location.stat().st_mode & 0o022)
-                pointer_ok = (
-                    location == kiseki_pointer_path()
-                    and location.is_file() and not location.is_symlink()
-                    and sha256_file(location) == pointer_record.get("sha256")
-                    and location.read_text(encoding="utf-8") == location_pointer_text(home)
-                    and private_mode
-                )
-                pointer_detail = str(location) if pointer_ok else f"path/hash/content/mode不整合: {location}"
-            except OSError as exc:
-                pointer_detail = f"読取失敗: {location}: {exc}"
-        add("location-pointer", "ok" if pointer_ok else "error", pointer_detail)
+        _check_runtime_and_launchers(home, metadata, Path(pointer["runtime"]), checks)
+        _check_location_pointer(home, metadata, checks)
     legacy = bool(os.environ.get("PA_HOME") or (Path.home() / ".pa").exists())
-    add("legacy-pa", "notice" if legacy else "ok", "検出しました（自動importしません）" if legacy else "未検出")
+    _add_check(checks, "legacy-pa", "notice" if legacy else "ok",
+               "検出しました（自動importしません）" if legacy else "未検出")
     active = active_transactions(home)
-    add("transactions", "error" if active else "ok", ", ".join(active) if active else "未完了なし")
+    _add_check(checks, "transactions", "error" if active else "ok", ", ".join(active) if active else "未完了なし")
     for host in [h for h in metadata.get("hosts", []) if h in HOSTS]:
         try:
-            manager = HostManager(host)
-            info = manager.preflight()
-            inventory = manager.inventory()
-            ownerships = metadata.get("host_ownership") if isinstance(metadata.get("host_ownership"), dict) else {}
-            ownership = ownerships.get(host) if isinstance(ownerships.get(host), dict) else {}
-            installed_path = ownership.get("installed_path")
-            version_ok = inventory.plugin_version in {None, metadata.get("version")}
-            marketplace_ok = (_same_owned_source(ownership.get("marketplace_fingerprint"),
-                                                  inventory.marketplace_fingerprint, metadata.get("version"))
-                              if ownership.get("marketplace") is True else True)
-            host_ok = inventory.plugin and inventory.plugin_enabled and version_ok and marketplace_ok
-            plugin_detail = info["version"] + (f" ({installed_path})" if installed_path else "")
-            if inventory.plugin and not inventory.plugin_enabled:
-                plugin_detail += " / plugin disabled"
-            if not version_ok:
-                plugin_detail += f" / plugin {inventory.plugin_version} != {metadata.get('version')}"
-            if not marketplace_ok:
-                plugin_detail += " / marketplace source/ref mismatch"
-            add(f"host:{host}", "ok" if host_ok else "error", plugin_detail)
-            if isinstance(installed_path, str):
-                try:
-                    _validate_installed_plugin(Path(installed_path), host, str(metadata.get("version")))
-                except InstallerError as exc:
-                    add(f"installed-plugin:{host}", "error", str(exc))
-                else:
-                    add(f"installed-plugin:{host}", "ok", installed_path)
-                    smoke_targets[host] = {"installed_path": installed_path}
-            else:
-                add(f"installed-plugin:{host}", "error", "記録済みinstalled pathがありません")
-            if host == "codex":
-                attestation = read_json(home / "install" / "codex-hook-trust.json", {})
-                if not isinstance(installed_path, str):
-                    add("codex-hook-trust", "pending_activation",
-                        "installed plugin pathをinventoryから確認できません")
-                else:
-                    plugin_path = Path(installed_path)
-                    hook_path = plugin_path / "hooks" / "hooks.json"
-                    try:
-                        current_hash = hashlib.sha256(hook_path.read_bytes()).hexdigest()
-                    except OSError as exc:
-                        add("codex-hook-trust", "error", f"installed hook定義を読めません: {exc}")
-                    else:
-                        trusted = (isinstance(attestation, dict)
-                                   and attestation.get("version") == metadata.get("version")
-                                   and attestation.get("plugin_path") == str(plugin_path)
-                                   and attestation.get("hook_sha256") == current_hash)
-                        add("codex-hook-trust", "ok" if trusted else "pending_activation",
-                            "未確認: Codexの/hooksでtrustしてください" if not trusted else "確認済み")
+            _check_host(home, metadata, host, checks, smoke_targets)
         except InstallerError as exc:
-            add(f"host:{host}", "error", str(exc))
+            _add_check(checks, f"host:{host}", "error", str(exc))
     if smoke_targets:
         try:
             _smoke_installed_plugins(smoke_targets, str(metadata.get("version")))
         except InstallerError as exc:
-            add("installed-hook-smoke", "error", str(exc))
+            _add_check(checks, "installed-hook-smoke", "error", str(exc))
         else:
-            add("installed-hook-smoke", "ok", "6 hook routes / disposable state")
+            _add_check(checks, "installed-hook-smoke", "ok", "6 hook routes / disposable state")
     statuses = {item["status"] for item in checks}
     overall = "error" if "error" in statuses else ("pending_activation" if "pending_activation" in statuses else "healthy")
     return (0 if overall == "healthy" else 1), {
@@ -1459,6 +1568,133 @@ def doctor() -> tuple[int, dict[str, Any]]:
         "version": metadata.get("version"),
         "checks": checks,
     }
+
+
+def _add_check(checks: list[dict[str, Any]], name: str, status: str, detail: str) -> None:
+    """Append one doctor check result."""
+    checks.append({"name": name, "status": status, "detail": detail})
+
+
+def _check_state_location(home: Path, checks: list[dict[str, Any]]) -> None:
+    """Check that the state root is allowed on this platform (private ACLs, not a WSL drive mount)."""
+    try:
+        _validate_platform_home(home)
+    except InstallerError as exc:
+        _add_check(checks, "state-permissions", "error", str(exc))
+    else:
+        _add_check(checks, "state-permissions", "ok", "state root/parent access policy")
+
+    if platform.system() == "Linux" and (os.environ.get("WSL_DISTRO_NAME") or "microsoft" in platform.release().casefold()):
+        parts = home.parts
+        if len(parts) >= 3 and parts[1] == "mnt" and len(parts[2]) == 1:
+            _add_check(checks, "wsl-home", "error", "WSLでは/mnt/<drive>配下をKISEKI_DA_HOMEにできません")
+
+
+def _check_runtime_and_launchers(
+    home: Path, metadata: dict[str, Any], runtime: Path, checks: list[dict[str, Any]],
+) -> None:
+    """Check the current runtime version and that local and PATH launchers are intact."""
+    version_file = runtime / "VERSION"
+    if runtime.is_dir() and version_file.is_file() and version_file.read_text(encoding="utf-8").strip() == metadata.get("version"):
+        _add_check(checks, "runtime", "ok", str(metadata.get("version")))
+    else:
+        _add_check(checks, "runtime", "error", "current pointerまたはversionが不整合です")
+    for name in ("kiseki-da.py", "kiseki-da", "kiseki-da.cmd"):
+        launcher = home / "bin" / name
+        _add_check(checks, f"launcher:{name}", "ok" if launcher.is_file() and not launcher.is_symlink() else "error",
+                   str(launcher))
+    for item in metadata.get("launchers", []):
+        if not isinstance(item, dict):
+            continue
+        path = Path(str(item.get("path", "")))
+        valid = (item.get("kind") == "file" and path.is_file() and not path.is_symlink()
+                 and sha256_file(path) == item.get("sha256"))
+        _add_check(checks, "launcher:PATH", "ok" if valid and shutil.which("kiseki-da") else "notice",
+                   str(path) if valid else f"不整合: {path}")
+
+
+def _check_location_pointer(home: Path, metadata: dict[str, Any], checks: list[dict[str, Any]]) -> None:
+    """Check that the KISEKI_DA_HOME pointer file matches its install record and is private."""
+    pointer_record = metadata.get("location_pointer")
+    pointer_ok = False
+    pointer_detail = "記録がありません"
+    if isinstance(pointer_record, dict) and isinstance(pointer_record.get("path"), str):
+        location = Path(pointer_record["path"])
+        try:
+            private_mode = os.name == "nt" or not bool(location.stat().st_mode & 0o022)
+            pointer_ok = (
+                location == kiseki_pointer_path()
+                and location.is_file() and not location.is_symlink()
+                and sha256_file(location) == pointer_record.get("sha256")
+                and location.read_text(encoding="utf-8") == location_pointer_text(home)
+                and private_mode
+            )
+            pointer_detail = str(location) if pointer_ok else f"path/hash/content/mode不整合: {location}"
+        except OSError as exc:
+            pointer_detail = f"読取失敗: {location}: {exc}"
+    _add_check(checks, "location-pointer", "ok" if pointer_ok else "error", pointer_detail)
+
+
+def _check_host(
+    home: Path, metadata: dict[str, Any], host: str, checks: list[dict[str, Any]],
+    smoke_targets: dict[str, dict[str, Any]],
+) -> None:
+    """Check one host's plugin state and installed files; queue a valid install for the hook smoke."""
+    manager = HostManager(host)
+    info = manager.preflight()
+    inventory = manager.inventory()
+    ownerships = metadata.get("host_ownership") if isinstance(metadata.get("host_ownership"), dict) else {}
+    ownership = ownerships.get(host) if isinstance(ownerships.get(host), dict) else {}
+    installed_path = ownership.get("installed_path")
+    version_ok = inventory.plugin_version in {None, metadata.get("version")}
+    marketplace_ok = (_same_owned_source(ownership.get("marketplace_fingerprint"),
+                                          inventory.marketplace_fingerprint, metadata.get("version"))
+                      if ownership.get("marketplace") is True else True)
+    host_ok = inventory.plugin and inventory.plugin_enabled and version_ok and marketplace_ok
+    plugin_detail = info["version"] + (f" ({installed_path})" if installed_path else "")
+    if inventory.plugin and not inventory.plugin_enabled:
+        plugin_detail += " / plugin disabled"
+    if not version_ok:
+        plugin_detail += f" / plugin {inventory.plugin_version} != {metadata.get('version')}"
+    if not marketplace_ok:
+        plugin_detail += " / marketplace source/ref mismatch"
+    _add_check(checks, f"host:{host}", "ok" if host_ok else "error", plugin_detail)
+    if isinstance(installed_path, str):
+        try:
+            _validate_installed_plugin(Path(installed_path), host, str(metadata.get("version")))
+        except InstallerError as exc:
+            _add_check(checks, f"installed-plugin:{host}", "error", str(exc))
+        else:
+            _add_check(checks, f"installed-plugin:{host}", "ok", installed_path)
+            smoke_targets[host] = {"installed_path": installed_path}
+    else:
+        _add_check(checks, f"installed-plugin:{host}", "error", "記録済みinstalled pathがありません")
+    if host == "codex":
+        _check_codex_trust(home, metadata, installed_path, checks)
+
+
+def _check_codex_trust(
+    home: Path, metadata: dict[str, Any], installed_path: object, checks: list[dict[str, Any]],
+) -> None:
+    """Check that the user's Codex hook trust attestation matches the installed hook definition."""
+    attestation = read_json(home / "install" / "codex-hook-trust.json", {})
+    if not isinstance(installed_path, str):
+        _add_check(checks, "codex-hook-trust", "pending_activation",
+                   "installed plugin pathをinventoryから確認できません")
+        return
+    plugin_path = Path(installed_path)
+    hook_path = plugin_path / "hooks" / "hooks.json"
+    try:
+        current_hash = hashlib.sha256(hook_path.read_bytes()).hexdigest()
+    except OSError as exc:
+        _add_check(checks, "codex-hook-trust", "error", f"installed hook定義を読めません: {exc}")
+    else:
+        trusted = (isinstance(attestation, dict)
+                   and attestation.get("version") == metadata.get("version")
+                   and attestation.get("plugin_path") == str(plugin_path)
+                   and attestation.get("hook_sha256") == current_hash)
+        _add_check(checks, "codex-hook-trust", "ok" if trusted else "pending_activation",
+                   "未確認: Codexの/hooksでtrustしてください" if not trusted else "確認済み")
 
 
 def attest_codex_trust() -> dict[str, Any]:

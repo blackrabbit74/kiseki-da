@@ -788,7 +788,7 @@ class SubprocessFailOpenTestCase(unittest.TestCase):
 
     def test_deny_survives_non_utf8_stdio_codec(self):
         """The Japanese deny reason must reach stdout even when the locale codec cannot encode it; otherwise the
-        hook fails open and the environment reads the empty stdout as allow (INTERFACES §6.3)."""
+        hook fails open and the environment reads the empty stdout as allow (`allow` itself is never printed)."""
         payload = json.loads(self.raw_fixture("cc-pre-tool-rm.json"))
         payload["tool_input"]["command"] = "rm -rf / ; echo 完了"
         stdin = json.dumps(payload, ensure_ascii=False)

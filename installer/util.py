@@ -16,6 +16,11 @@ class InstallerError(Exception):
 
 
 def kiseki_home() -> Path:
+    """KISEKI_DA_HOME or ~/.kiseki-da, resolved. Same rule as the runtime store.kiseki_da_home().
+
+    The installer loads the runtime of the source it installs (possibly a downloaded update) only after it
+    needs this path, so it does not import it here; tests/test_state_home.py keeps the two rules identical.
+    """
     raw = os.environ.get("KISEKI_DA_HOME")
     return (Path(raw).expanduser() if raw else Path.home() / ".kiseki-da").resolve()
 

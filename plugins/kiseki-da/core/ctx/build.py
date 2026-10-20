@@ -115,9 +115,9 @@ def _item_line(item: dict) -> str:
 # ---------------------------------------------------------------- profile parts
 
 def _resolve_keys(items: list[dict], conflicts: list[dict]) -> list[tuple[_dt.date, list[str]]]:
-    """Collapse items sharing a `key` (ARCHITECTURE §5.4): only the best source rank survives; two or more
-    at the best rank become one ⚠ line plus a conflicts entry. Entries keep profile order and carry the
-    newest recorded_at of what they show."""
+    """Collapse items sharing a `key` (source priority, unresolved conflicts: docs/PRINCIPLES.md LP-4): only the
+    best source rank survives; two or more at the best rank become one ⚠ line plus a conflicts entry. Entries
+    keep profile order and carry the newest recorded_at of what they show."""
     groups: dict[str, list[dict]] = {}
     order: list[tuple[str, object]] = []
     for it in items:

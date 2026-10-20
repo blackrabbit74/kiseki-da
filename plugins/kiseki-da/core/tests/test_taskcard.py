@@ -1,5 +1,5 @@
 """test_taskcard.py — parse/render round trip, check_evidence branches, close/defer, `last` resolution,
-set_evidence events, brief (INTERFACES §10)."""
+set_evidence events, brief."""
 from __future__ import annotations
 
 import contextlib
@@ -108,7 +108,7 @@ class NewCardGoalTests(TaskcardTestCase):
         self.assertEqual(T.load(self.st, card.id).goal, goal)
 
     def test_goal_with_heading_line_is_rejected(self):
-        """A `# ` line would be read back as a section heading (§5), moving or dropping the rest of the goal."""
+        """A `# ` line would be read back as a section heading (see core/policy/task-card.md), moving the rest of the goal."""
         for goal in ("Fix login\n# Log\nsecret", "# Goal\nx", "a\n# Notes\nmore", "  # Log"):
             with self.assertRaises(UserError, msg=goal) as cm:
                 T.new_card(self.st, goal, risk="R1")
@@ -118,7 +118,7 @@ class NewCardGoalTests(TaskcardTestCase):
 
 
 class IdValidationTests(TaskcardTestCase):
-    """show/set/close/defer/brief pass a raw positional id; load/save must keep it inside $PA_HOME/tasks."""
+    """show/set/close/defer/brief pass a raw positional id; load/save must keep it inside $KISEKI_DA_HOME/tasks."""
 
     def test_load_and_save_reject_ids_outside_the_namespace(self):
         for bad in ("../victim", "A", "-x", "a/b", "a.b", "", "a" * 65):
@@ -480,7 +480,7 @@ class CloseDeferTests(TaskcardTestCase):
 
     def test_cli_argument_errors_are_one_japanese_line(self):
         """argparse errors and a missing subcommand: exit 1, nothing on stdout, one Japanese stderr line;
-        --help is Japanese too (BUILD_BRIEF §2, INTERFACES §2)."""
+        --help is Japanese too (CLAUDE.md: user-facing text is Japanese)."""
         from core.ctx import cli
         cases = [
             (["task", "defer", "t2"], "--reason を指定してください"),
@@ -521,7 +521,7 @@ class CloseDeferTests(TaskcardTestCase):
     def test_evals_run_argument_errors_are_one_japanese_line(self):
         """evals/run.py parses its own flags (cli.py only execs it, so cli.py's translation never sees them):
         an explicit value on a flag and an unknown flag are exit 1, nothing on stdout, one Japanese stderr
-        line with the same wording as cli.py (BUILD_BRIEF §2, DECISIONS 2026-09-04 run.py)."""
+        line with the same wording as cli.py (CLAUDE.md: user-facing text is Japanese)."""
         runner = S.REPO_ROOT / "evals" / "run.py"
         cases = [
             (["--dry-run=x"], "--dry-run は値を取りません（指定値: 'x'）"),
