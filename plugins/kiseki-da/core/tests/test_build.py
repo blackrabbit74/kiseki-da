@@ -312,7 +312,7 @@ class BuildTestCase(unittest.TestCase):
         self.assertIn(f"session: {self.st.effective_sid()}", B.build(self.st)[0])
         self.assertIn("session: s-test", B.build(self.st)[0])   # explicit sid wins over session/current
 
-    def test_env_drops_name_line_over_150_tokens(self):
+    def test_env_drops_name_line_over_env_token_limit(self):
         prof = self.st.read_profile()
         prof["da"]["name"] = "名" * 400
         self.st.write_profile(prof)

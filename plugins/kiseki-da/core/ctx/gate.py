@@ -41,9 +41,11 @@ DENY_PATTERNS: list[tuple[str, str]] = [   # (regex on command, reason)
     (r"(?s)\b(?:curl|wget)\b.*\|\s*(?:sudo\s+(?:-\S+\s+)*)?(?:sh|bash|zsh|dash|ksh)\b",
      "ダウンロードした内容をそのままシェルで実行することは禁止です"),
     # Native Windows equivalents. Broad recursive/forced deletion is intentionally denied rather than guessed safe.
+    # -Force needs at least `-fo`: PowerShell rejects a bare `-f` as ambiguous (-Filter / -Force), so `-f` and
+    # bash's `--force` are left to the rm rule above, and `rm -r -f build` is judged like `rm -rf build`.
     (r"(?i)\b(?:Remove-Item|ri|rm|del|erase|rd|rmdir)\b"
      r"(?=[^;&|\n]*-(?:r|re|rec|recu|recur|recurs|recurse)\b)"
-     r"(?=[^;&|\n]*-(?:f|fo|for|forc|force)\b)",
+     r"(?=[^;&|\n]*(?<!-)-(?:fo|for|forc|force)\b)",
      "PowerShell の再帰・強制削除は禁止です"),
     (r"(?i)\b(?:rd|rmdir|del|erase)\b(?=[^;&|\n]*/s\b)(?=[^;&|\n]*/q\b)",
      "cmd.exe の再帰・強制削除は禁止です"),

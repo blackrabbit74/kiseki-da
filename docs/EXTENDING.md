@@ -364,7 +364,7 @@ pre-tool hook はこの結果にさらに次を重ねる（`hooks.handle`）:
 | 1 | ルート・ホーム・親ディレクトリの再帰削除（rm -rf）は禁止です | `rm` に再帰フラグ（`-r` `-R` `-rf` `-fr` `--recursive`。順序不問、オペランドの後でも可）が付き、同じコマンド区間のオペランドに `/`、`/*`、`~`、`$HOME`、`${HOME}`、`..` のどれかがある |
 | 2 | main/master への force push は禁止です（--force-with-lease は可） | `git push` で、同じ区間に `--force` か `-f` と、ブランチ名 `main` か `master` の両方がある。`--force-with-lease` は対象外 |
 | 3 | ダウンロードした内容をそのままシェルで実行することは禁止です | `curl` か `wget` の後ろに、パイプを挟んで（間に他のフィルタがあってもよい）`sh` `bash` `zsh` `dash` `ksh` がある。`sudo` 経由も含む |
-| 4 | PowerShell の再帰・強制削除は禁止です | `Remove-Item` `ri` `rm` `del` `erase` `rd` `rmdir` のいずれかに、`-r`〜`-recurse` と `-f`〜`-force` が別々のフラグとして同じ区間にある（大文字小文字不問）。`rm -r -f x` は対象で、`rm -rf x` は単独の語として一致しないので対象外（#1 の対象のときだけ deny） |
+| 4 | PowerShell の再帰・強制削除は禁止です | `Remove-Item` `ri` `rm` `del` `erase` `rd` `rmdir` のいずれかに、`-r`〜`-recurse` と `-fo`〜`-force` が別々のフラグとして同じ区間にある（大文字小文字不問）。単独の `-f` と `--force` は対象外。PowerShell は `-f` を `-Filter` と `-Force` のどちらとも取れるとして拒否するので、`-f` は強制削除にならない。このため `rm -r -f x` `rm -rf x` `rm -r --force x` など bash 形式の再帰・強制削除は書き方によらず #1 だけで判定する（#1 の対象のときだけ deny） |
 | 5 | cmd.exe の再帰・強制削除は禁止です | `rd` `rmdir` `del` `erase` に `/s` と `/q` が両方ある |
 | 6 | ダウンロードした内容をそのまま PowerShell で実行することは禁止です | `Invoke-WebRequest` `iwr` `Invoke-RestMethod` `irm` の出力を `Invoke-Expression` か `iex` にパイプしている |
 | 7 | chmod 777 は禁止です | `chmod` に（オプションの後で）`777`、または先頭に 8 進数字が 1 つ付いた `0777` などを指定 |

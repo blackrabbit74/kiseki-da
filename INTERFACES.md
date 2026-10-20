@@ -20,7 +20,7 @@
 
 一覧系は`--json`でJSONを返す。変更系は確認前に差分を表示し、厳密な`--dry-run`ではhost CLIも起動せずファイル・plugin manager・networkを変更しない。そのためhost version/inventory probeは実行時planまで延期する。非対話実行は完全なanswers fileと`--yes`を要求する。
 
-終了コードは0=検証済み成功、1=書込前失敗、2=rollback済み失敗、3=rollback不完全、130=中断である。hookだけは常に0でfail-openする。
+installerの終了コードは0=検証済み成功、1=書込前失敗、2=rollback済み失敗、3=rollback不完全、130=中断である。runtime CLI（`task`・`search`など）は0=成功、1=利用者の入力エラー、2=想定外の内部エラー（rollbackは伴わない）、130=中断である。hookだけは常に0でfail-openする。
 
 ## Answers JSON
 

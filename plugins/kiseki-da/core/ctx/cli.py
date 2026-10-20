@@ -4,7 +4,8 @@
 Command handlers live in cmd_task.py, cmd_memory.py, cmd_persona.py and cmd_admin.py (helpers shared by
 them in cli_common.py); the heavier modules they use are imported lazily inside each command. This file
 keeps the entry point, the parser and the fail-open hook wrapper. `hook` never exits non-zero
-(fail-open); exit 2 means "block" in every environment and is never used for errors.
+(fail-open). Other commands exit 1 on a UserError, 2 on an unexpected internal error (nothing is rolled
+back, unlike the installer's 2) and 130 on interrupt.
 """
 from __future__ import annotations
 
