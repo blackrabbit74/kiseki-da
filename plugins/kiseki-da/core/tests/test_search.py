@@ -1,4 +1,4 @@
-"""test_search.py — tokenizer, BM25 ranking, decay, kinds / since filters, snippets, search event (INTERFACES §7, §10)."""
+"""test_search.py — tokenizer, BM25 ranking, decay, kinds / since filters, snippets, search event."""
 from __future__ import annotations
 
 import contextlib

@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.1.0-beta.11 ソース版 - 2026-10-20 改造する人向けの見直し
+
+利用者が自分でコードを読んで改造・拡張できるようにする見直し。動作の変更は「ガード」の1件と版番号の表示だけで、ほかの `--help`、hook出力、終了コード、smokeの結果はbeta.10とバイト単位で同一。タグ付きreleaseは未発行。
+
+### 文書と参照
+
+- コード・テスト・スキーマ・公開文書の中の旧非公開文書の決定IDや節番号への参照を、公開ツリー内の見出しへのリンクか、その場の理由に書き直した。参照切れはテスト（`tests/test_doc_refs.py`）で検出する。
+- `ARCHITECTURE.md` と `INTERFACES.md` の「上記と異なる場合はこちらを優先」形式の節をなくし、本文を今の動作だけにした。`INTERFACES.md` の版の表記を現在の版に直した。
+- 文書とコードの食い違いを文書側で直した: 環境情報の上限（240 token）、runtime CLIの終了コード（2は内部エラー、rollbackなし）、hookは6種、runtimeファイル上限60、profile件数とワーカー数はコードで制限しないこと、`event.schema.json` の説明文（`persona` 部品と新しい4種のイベント）、外部ツール後の文脈注入はCodexだけ、SessionEndの記憶候補抽出はClaude Codeだけ。
+
+### 改造ガイド
+
+- `docs/EXTENDING.md` を追加。よくある改造6種（危険コマンド規則、CLIコマンド、hookの処理、常駐文脈の予算、persona項目、状態スキーマ）ごとに、触るファイル・回すテスト・壊してはいけないことを書いた。
+- 今のコードから書き起こした契約（正規化イベント、hookのホスト別出力、イベント種別、常駐文脈の部品と予算、検索の係数、週次レポートのキー、ガード規則、記憶候補、personaの上限）を同じ文書に載せ、コードとのズレをテスト（`tests/test_extending_contracts.py`）で検出する。
+- hookが外部プロセスもネットワークも呼ばないことをテスト（`tests/test_hook_isolation.py`）で検査する。
+
+### 名前と構造
+
+- 状態フォルダの場所の決め方について、installerとruntimeの一致をテスト（`tests/test_state_home.py`）で保証した。旧名 `pa_home`・`PA_HOME` は互換と移行の検出だけに残した。
+- `core/ctx/cli.py` を入口・引数の組み立て・hookのfail-openの包みだけにし、コマンドの処理を `cmd_task.py`・`cmd_memory.py`・`cmd_persona.py`・`cmd_admin.py` に、共通の補助を `cli_common.py` に分けた。`python3 core/ctx/cli.py` の起動と既存の固定参照はそのまま動く。
+- `core/ctx/store.py` の汎用部分を `fileio.py`（原子書き込み・JSONL・ロック）、`tomlemit.py`、`schemacheck.py` に分けた。
+- 移した名前は `core.ctx.cli` と `core.ctx.store` から引き続きimportできる（0.2.0で外す予定。`tests/test_split_compat.py`）。
+- `core/ctx` のモジュール上限を12から20に上げた。runtimeファイルの上限60は維持（51ファイル）。
+- installerの `install()`・`uninstall()`・`doctor()` と、`installer/cli.py` の `_install_command`・`main` を名前の付いた段に分けた。
+
+### ガード
+
+- bash形式の `rm` の再帰・強制削除は、フラグの書き方（`-rf`・`-r -f`・`-R -f`・`-r --force` など）によらず、対象がルート・ホーム・親ディレクトリかどうかだけで判定するようにした。以前は `rm -rf build` が許可で `rm -r -f build` が拒否だった。PowerShellの再帰・強制削除の規則は `-fo`〜`-force` を強制フラグとし、単独の `-f`（PowerShellでは `-Filter` と区別できず拒否される）と `--force` を対象から外した。
+
 ## 0.1.0-beta.10 ソース版 - 2026-09-09 OS互換性の追補
 
 - macOSの`/var`と`/private/var`の違いでstagingの包含確認が失敗する問題を修正。

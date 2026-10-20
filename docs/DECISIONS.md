@@ -53,3 +53,8 @@
 - `--source`はmaterialize済みのversion付きruntimeをホストの供給元として使う。rollbackでは旧runtimeからpluginを再導入してから元のhost設定を復元し、編集済み開発checkoutを旧版だと誤認しない。
 - 無効なpluginは既定で保持する。利用者が再開を意図する場合の`--enable-plugin`だけ、native managerによる再有効化を許可する。hook trustは別のホスト判断として残す。
 - 廃止条件: Windowsで旧hook pathを保持するnative update/rollbackが両ホストから提供され、同じ復元試験で代替できたとき。
+
+# 2026-10-19: 改造する人向けの保守性の見直し
+
+- 2026-10-19 決定: 2026-09-05の12モジュール上限を20に上げ、cli.pyとstore.pyを分ける。cli.pyには入口・引数の組み立て・hookのfail-openの包みを残し、コマンドの処理をcmd_task.py・cmd_memory.py・cmd_persona.py・cmd_admin.pyに、全コマンドが使う補助をcli_common.pyに移す。store.pyには定数とStoreを残し、汎用部分（ファイルの原子書き込み・JSONL・ロック、TOML書き出し、スキーマ検査）をfileio.py・tomlemit.py・schemacheck.pyに移す。移した名前はcli.py・store.pyから引き続きimportできる。60runtimeファイルの上限は保持し、上限を避けるためのサブパッケージは作らない — 理由: 利用者が改造する入口を1,000行を超えるファイルから探さずに済み、汎用部分はStoreをimportしない。補助をcli.pyに置かないのは、cli.pyが__main__として動くためコマンド側からimportすると二重に読み込まれるから — 廃止条件: cli.py・store.pyからの互換のための再公開は0.2.0で外す。上限はStoreかコマンド群をさらに分けるときに見直す。
+- 2026-10-20 決定: PowerShellの再帰・強制削除の規則は、強制フラグを`-fo`〜`-force`だけとし、単独の`-f`と`--force`を対象から外す。bash形式の`rm`の再帰・強制削除（`-rf`・`-r -f`・`-r --force`など）は書き方によらず、ルート・ホーム・親ディレクトリの規則だけで判定する — 理由: 以前は`rm -rf build`が許可で`rm -r -f build`が拒否になり、書き方で結果が変わっていた。PowerShellは単独の`-f`を`-Filter`と`-Force`のどちらとも取れるとして拒否するので、`-f`を外しても実際に強制削除になる書き方は引き続き拒否される — 廃止条件: PowerShellの引数解釈が変わり単独の`-f`が`-Force`になるとき、またはガード規則をシェルごとに分けるとき。

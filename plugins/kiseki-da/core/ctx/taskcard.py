@@ -1,6 +1,6 @@
 """taskcard.py — task-card model, parse/render, persistence, evidence checks, close/defer/brief.
 
-File format: INTERFACES.md §5. Signatures: INTERFACES.md §3. Depends on store only.
+File format: core/policy/task-card.md. Depends on store only.
 """
 from __future__ import annotations
 
@@ -195,7 +195,7 @@ def _default_id(goal: str) -> str:
 
 
 def _check_id(id: str) -> str:
-    """Ids are the file stem under tasks/ (INTERFACES §1/§2); anything else could point outside $PA_HOME."""
+    """Ids are the file stem under tasks/; anything else could point outside the state directory."""
     if not isinstance(id, str) or not _store.ID_RE.match(id):
         raise UserError(f"カード id が不正です（^[a-z0-9][a-z0-9-]{{0,63}}$ に一致させてください）: {id}")
     return id
@@ -206,7 +206,7 @@ def new_card(store: Store, goal: str, risk: str = "R1", kind: str = "code", id: 
     if not goal:
         raise UserError("--goal を指定してください")
     if any(line.startswith("# ") for line in goal.splitlines()):
-        # parse() reads every "# " line as a section heading (§5), so such a goal would not round-trip.
+        # parse() reads every "# " line as a section heading, so such a goal would not round-trip.
         raise UserError("--goal に「# 」で始まる行は使えません（カードの見出しと衝突します）")
     if risk not in RISKS:
         raise UserError(f"risk は {'/'.join(RISKS)} のいずれかです: {risk}")
@@ -259,7 +259,7 @@ def list_cards(store: Store, status: str | None = None) -> list[TaskCard]:
     return cards
 
 
-# ---------------------------------------------------------------- P1 (parallel build) — signatures per INTERFACES §3
+# ---------------------------------------------------------------- operations (criteria, evidence, brief, close, defer)
 
 BRIEF_ROLES = ("research", "review")
 _EVIDENCE_REF_FORMAT_JA = "<ev:sid:seq> / last / last:<tool> のいずれかで指定してください"
@@ -413,7 +413,7 @@ def set_next(store: Store, card: TaskCard, text: str) -> None:
 
 
 def check_evidence(store: Store, criterion: Criterion) -> str | None:
-    """INTERFACES §3 rules, nothing more. None = OK, else one fixed English reason (CLI maps to Japanese)."""
+    """The evidence ref must name a successful, bound tool_call. None = OK, else one fixed English reason (CLI maps it)."""
     ref = (criterion.evidence or "").strip()
     if not ref or ref == "-":
         return "no evidence"
@@ -476,7 +476,8 @@ def close(store: Store, card: TaskCard) -> list[str]:
     for c in card.criteria:
         c.status = "pass"
     card.status = "done"
-    save(store, card, ["status:done"])  # DECISIONS A-11: task_update first, then task_close
+    # close goes through save(): a task_update (status:done) precedes the task_close event
+    save(store, card, ["status:done"])
     store.append_event({"type": "task_close", "task": card.id, "risk": card.risk, "status": "done"})
     return []
 

@@ -161,6 +161,21 @@ def _saved_activation() -> tuple[str | None, list[Path]]:
 
 def _install_command(args: argparse.Namespace) -> int:
     answers = load_answers(args.answers)
+    _validate_install_answers(args, answers)
+    interactive_choices = not args.yes and not args.dry_run and not args.answers
+    hosts = _install_hosts(args, answers, interactive_choices)
+    scope, project = _install_scope_and_project(args, answers, interactive_choices)
+    source = Path(args.source).expanduser().resolve() if args.source else SOURCE_ROOT
+    security, import_legacy = _install_security_and_migration(args, answers)
+    if args.yes and not args.dry_run:
+        if "identity" not in answers or "persona" not in answers:
+            raise InstallerError("非対話installのanswersにはidentityとpersonaが必要です。")
+    return _run_install(args, answers, hosts=hosts, scope=scope, project=project, source=source,
+                        security=security, import_legacy=import_legacy)
+
+
+def _validate_install_answers(args: argparse.Namespace, answers: dict[str, Any]) -> None:
+    """Reject unknown or malformed --answers fields before anything is asked or installed."""
     allowed = {"schema", "host", "hosts", "scope", "project", "activation", "identity", "persona",
                "host_security", "security", "preview", "migration"}
     unknown_answers = sorted(set(answers) - allowed)
@@ -189,7 +204,10 @@ def _install_command(args: argparse.Namespace) -> int:
     if "max_rounds" in preview_answers and (not isinstance(preview_answers["max_rounds"], int)
                                              or not 1 <= preview_answers["max_rounds"] <= 3):
         raise InstallerError("answers.preview.max_roundsは1〜3で指定してください。")
-    interactive_choices = not args.yes and not args.dry_run and not args.answers
+
+
+def _install_hosts(args: argparse.Namespace, answers: dict[str, Any], interactive_choices: bool) -> list:
+    """Hosts from --host, then answers, then an interactive choice; "all" when nothing says otherwise."""
     selected_host = args.host or answers.get("hosts") or answers.get("host")
     if selected_host is None and interactive_choices:
         selected_host = _choose("導入するhost", ("claude-code", "codex", "all"), "all")
@@ -198,6 +216,16 @@ def _install_command(args: argparse.Namespace) -> int:
         hosts = host
     else:
         hosts = [str(host)]
+    return hosts
+
+
+def _install_scope_and_project(args: argparse.Namespace, answers: dict[str, Any],
+                               interactive_choices: bool) -> tuple[str, Path | None]:
+    """Scope and project root from arguments, answers, the saved activation, or a prompt.
+
+    A project given in answers.activation.projects also supplies answers["persona"] when none is set.
+    """
+    activation = answers.get("activation") if isinstance(answers.get("activation"), dict) else {}
     saved_scope, saved_projects = _saved_activation()
     selected_scope = args.scope or activation.get("mode") or answers.get("scope") or saved_scope
     if selected_scope is None and interactive_choices:
@@ -222,16 +250,23 @@ def _install_command(args: argparse.Namespace) -> int:
         except EOFError:
             raise InstallerError("project pathを入力できません。--projectを指定してください。") from None
     project = Path(project_value).expanduser() if project_value else None
-    source = Path(args.source).expanduser().resolve() if args.source else SOURCE_ROOT
+    return scope, project
+
+
+def _install_security_and_migration(args: argparse.Namespace, answers: dict[str, Any]) -> tuple[str, bool]:
+    """Host security mode ("preserve" unless asked) and whether to copy a legacy state folder."""
     security_answers = answers.get("security") if isinstance(answers.get("security"), dict) else {}
     recommended = security_answers.get("apply_recommended_host_settings")
     security = args.host_security or str(answers.get("host_security") or
                                          ("recommended" if recommended is True else "preserve"))
     migration = answers.get("migration") if isinstance(answers.get("migration"), dict) else {}
     import_legacy = bool(args.import_legacy or migration.get("import_legacy") is True)
-    if args.yes and not args.dry_run:
-        if "identity" not in answers or "persona" not in answers:
-            raise InstallerError("非対話installのanswersにはidentityとpersonaが必要です。")
+    return security, import_legacy
+
+
+def _run_install(args: argparse.Namespace, answers: dict[str, Any], *, hosts: list, scope: str,
+                 project: Path | None, source: Path, security: str, import_legacy: bool) -> int:
+    """Show the plan, ask unless --yes, install, then print where the launcher is."""
     if args.dry_run:
         preview_code, preview = install(hosts=hosts, scope=scope, project=project, answers=answers,
                                         yes=True, dry_run=True, source=source, host_security=security,
@@ -314,6 +349,74 @@ def _update_command(args: argparse.Namespace) -> int:
         return code
 
 
+def _doctor_command(args: argparse.Namespace) -> int:
+    if args.confirm_codex_trust:
+        if not args.yes and not _confirm():
+            print("中止しました。")
+            return 130
+        record = attest_codex_trust()
+        if not args.json:
+            print(f"Codex hook trust attestation: {record['hook_sha256']}")
+    code, result = doctor()
+    if args.json:
+        _emit(result, json_output=True)
+    else:
+        print(f"Kiseki DA doctor: {result['status']}")
+        for check in result["checks"]:
+            print(f"[{check['status']}] {check['name']}: {check['detail']}")
+    return code
+
+
+def _rollback_command(args: argparse.Namespace) -> int:
+    if not args.yes and not _confirm():
+        print("中止しました。")
+        return 130
+    code, result = rollback(args.transaction)
+    _emit(result, json_output=False)
+    return code
+
+
+def _uninstall_command(args: argparse.Namespace) -> int:
+    if args.dry_run:
+        preview_code, preview = uninstall(hosts=args.host, dry_run=True)
+        _emit(preview)
+        return preview_code
+    preview_code, preview = uninstall(hosts=args.host, dry_run=True, allow_host_probes=True)
+    _emit(preview)
+    if not args.yes:
+        if not _confirm():
+            print("中止しました。")
+            return 130
+    code, result = uninstall(hosts=args.host, dry_run=False)
+    _emit(result, show_plan=False)
+    return code
+
+
+def _dispatch(args: argparse.Namespace, unknown: list[str]) -> int:
+    """Run one parsed installer command. Commands with their own handler reject leftover arguments;
+    setup, persona and project pass them on to the runtime."""
+    handlers = {"install": _install_command, "update": _update_command, "doctor": _doctor_command,
+                "rollback": _rollback_command, "uninstall": _uninstall_command}
+    if args.command in handlers:
+        if unknown:
+            raise InstallerError("不明な引数です: " + " ".join(unknown))
+        return handlers[args.command](args)
+    if args.command == "version":
+        print(VERSION)
+        return 0
+    if args.command == "verify-release":
+        verify_checksum(Path(args.archive).resolve(), args.checksum)
+        print("SHA-256: OK")
+        return 0
+    if args.command == "setup":
+        return runtime_dispatch(["setup", *unknown])
+    if args.command == "persona":
+        return runtime_dispatch(["persona", *args.persona_args, *unknown])
+    if args.command == "project":
+        return runtime_dispatch(["project", *args.project_args, *unknown])
+    raise InstallerError(f"未対応commandです: {args.command}")
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv:
@@ -337,71 +440,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command is None:
             parser.print_help()
             return 1
-        if args.command == "install":
-            if unknown:
-                raise InstallerError("不明な引数です: " + " ".join(unknown))
-            return _install_command(args)
-        if args.command == "update":
-            if unknown:
-                raise InstallerError("不明な引数です: " + " ".join(unknown))
-            return _update_command(args)
-        if args.command == "doctor":
-            if unknown:
-                raise InstallerError("不明な引数です: " + " ".join(unknown))
-            if args.confirm_codex_trust:
-                if not args.yes and not _confirm():
-                    print("中止しました。")
-                    return 130
-                record = attest_codex_trust()
-                if not args.json:
-                    print(f"Codex hook trust attestation: {record['hook_sha256']}")
-            code, result = doctor()
-            if args.json:
-                _emit(result, json_output=True)
-            else:
-                print(f"Kiseki DA doctor: {result['status']}")
-                for check in result["checks"]:
-                    print(f"[{check['status']}] {check['name']}: {check['detail']}")
-            return code
-        if args.command == "rollback":
-            if unknown:
-                raise InstallerError("不明な引数です: " + " ".join(unknown))
-            if not args.yes and not _confirm():
-                print("中止しました。")
-                return 130
-            code, result = rollback(args.transaction)
-            _emit(result, json_output=False)
-            return code
-        if args.command == "uninstall":
-            if unknown:
-                raise InstallerError("不明な引数です: " + " ".join(unknown))
-            if args.dry_run:
-                preview_code, preview = uninstall(hosts=args.host, dry_run=True)
-                _emit(preview)
-                return preview_code
-            preview_code, preview = uninstall(hosts=args.host, dry_run=True, allow_host_probes=True)
-            _emit(preview)
-            if not args.yes:
-                if not _confirm():
-                    print("中止しました。")
-                    return 130
-            code, result = uninstall(hosts=args.host, dry_run=False)
-            _emit(result, show_plan=False)
-            return code
-        if args.command == "version":
-            print(VERSION)
-            return 0
-        if args.command == "verify-release":
-            verify_checksum(Path(args.archive).resolve(), args.checksum)
-            print("SHA-256: OK")
-            return 0
-        if args.command == "setup":
-            return runtime_dispatch(["setup", *unknown])
-        if args.command == "persona":
-            return runtime_dispatch(["persona", *args.persona_args, *unknown])
-        if args.command == "project":
-            return runtime_dispatch(["project", *args.project_args, *unknown])
-        raise InstallerError(f"未対応commandです: {args.command}")
+        return _dispatch(args, unknown)
     except KeyboardInterrupt:
         print("中断しました。", file=sys.stderr)
         return 130

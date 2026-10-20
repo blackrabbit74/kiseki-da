@@ -4,7 +4,7 @@
 
 Kiseki DA（Digital Assistant）は、Claude Code / Codexに、案件ごとの文脈、承認制の記憶、証拠付きタスク管理、キャラクター設定を加える個人AIハーネスです。日常の相談から、必要なスキルと初期文脈を持つ作業環境の作成・再開までを支えます。Python 3.11〜3.14の標準ライブラリで動き、外部telemetryはありません。
 
-> **ソース版 0.1.0-beta.10 — Windows運用フィードバック**。PowerShellの誤停止、CLIの起動・証拠照合、Windows用の更新経路を修正しています。Windows 11 nativeは試験運用中です。タグ付き公開版はv0.1.0-beta.8です。
+> **ソース版 0.1.0-beta.11 — 改造する人向けの見直し**。コードを読んで改造・拡張する人のために、文書・参照・構造を整理し、[改造の手順と契約](docs/EXTENDING.md)を加えました。利用者から見た動作の変更はbash形式の`rm`の判定だけです。Windows 11 nativeは試験運用中です。タグ付き公開版はv0.1.0-beta.8です。
 
 ## できること
 
@@ -198,6 +198,6 @@ python3 scripts/check_project_implementation.py
 - App: Codexの`Local`、Claude DesktopのCodeタブのlocal session
 - 対象外: WSL2、cloud session、Codex管理Worktree、Cursor、無人実行
 
-[アーキテクチャ](docs/ARCHITECTURE.md) ／ [変更履歴](CHANGELOG.md) ／ [リリース判断](docs/RELEASE-DECISIONS.md) ／ [脆弱性の連絡](SECURITY.md)
+[アーキテクチャ](docs/ARCHITECTURE.md) ／ [改造の手順と契約](docs/EXTENDING.md) ／ [変更履歴](CHANGELOG.md) ／ [リリース判断](docs/RELEASE-DECISIONS.md) ／ [脆弱性の連絡](SECURITY.md)
 
 作者: Navigator / License: MIT

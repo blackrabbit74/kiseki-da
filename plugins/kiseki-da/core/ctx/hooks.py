@@ -1,4 +1,4 @@
-"""hooks.py — hook input normalization, dispatch and per-environment output (INTERFACES.md §6).
+"""hooks.py — hook input normalization, dispatch and per-environment output.
 
 parse_input → handle → format_output run in one process per hook call; cli.py owns stdin/stdout and the
 fail-open contract. Hooks never call an LLM or the network. Depends on store, gate and build.
@@ -19,7 +19,7 @@ from core.ctx import store as _store
 from core.ctx.store import Store, UserError
 
 EVENTS = ("session-start", "user-input", "pre-tool", "post-tool", "stop", "session-end")
-# raw hook_event_name → normalized event, per environment (§6.1)
+# raw hook_event_name → normalized event, per environment
 EVENT_NAMES: dict[str, dict[str, str]] = {
     "claude-code": {"SessionStart": "session-start", "UserPromptSubmit": "user-input", "PreToolUse": "pre-tool", "PostToolUse": "post-tool",
                     "PostToolUseFailure": "post-tool", "Stop": "stop", "SessionEnd": "session-end"},
@@ -61,7 +61,7 @@ class HookOutput:
     reason: str | None = None
 
 
-# ---------------------------------------------------------------- 6.1 normalization
+# ---------------------------------------------------------------- normalization
 
 def _text(v) -> str | None:
     """Non-empty str (or int) → str, anything else → None."""
@@ -95,7 +95,9 @@ def _patch_paths(tool_input: dict) -> list[str]:
 
 
 def _tool_result(env: str, raw_name, payload: dict, tool: str | None) -> tuple[bool | None, str | None]:
-    """§4 `ok` rules (1)-(4) and the text that feeds out_len / out_hash."""
+    """`ok` (True / False / None) and the text that feeds out_len / out_hash. A failure event is always False;
+    a missing response is None. A dict response uses `success`, then an integer exit code, then error flags.
+    A bare string carries no exit status (None for Codex)."""
     failed = raw_name in FAILURE_EVENTS
     resp = payload.get("tool_response")
     if resp is None:
@@ -156,7 +158,7 @@ def parse_input(payload: dict, env_hint: str | None, event_hint: str) -> HookInp
                      source=source, stop_hook_active=stop_hook_active, raw=payload)
 
 
-# ---------------------------------------------------------------- 6.2 handlers
+# ---------------------------------------------------------------- handlers
 
 def _target(tool_input: dict | None) -> str:
     """tool_input.command → tool_input.file_path → dumps(tool_input); redacted, then ≤200 chars."""
@@ -176,7 +178,7 @@ def _is_external(tool: str | None) -> bool:
 
 
 def handle(store: Store, hi: HookInput) -> HookOutput:
-    """§6.2. `store` is already constructed with sid=hi.sid; gate events are written only by stop_gate."""
+    """Per-event handling. `store` is already constructed with sid=hi.sid; gate events are written only by stop_gate."""
     # Resolve activation before *any* state access or write.  In project mode an
     # unregistered cwd must be observationally equivalent to no plugin.
     if not store.is_project:
@@ -226,7 +228,8 @@ def handle(store: Store, hi: HookInput) -> HookOutput:
             return HookOutput(context=EXTERNAL_CONTEXT)
         return HookOutput()
     if hi.event == "stop":
-        blocked, reason = gate.stop_gate(store, hi.sid, hi.stop_hook_active)   # A-12: always called
+        # always called: exactly one gate event per stop
+        blocked, reason = gate.stop_gate(store, hi.sid, hi.stop_hook_active)
         return HookOutput(decision="block", reason=reason) if blocked else HookOutput(reason=reason)
     if hi.event == "session-end":
         created = 0
@@ -247,10 +250,10 @@ def handle(store: Store, hi: HookInput) -> HookOutput:
     raise ValueError(f"unknown event: {hi.event!r}")
 
 
-# ---------------------------------------------------------------- 6.3 output
+# ---------------------------------------------------------------- output
 
 def format_output(hi: HookInput, out: HookOutput) -> tuple[str, str, int]:
-    """§6.3 table. exit is always 0 in v1; `permissionDecision: allow` is never emitted."""
+    """Render the per-environment output. exit is always 0 in v1; `permissionDecision: allow` is never emitted."""
     env, dumps = hi.env, _store.dumps
     stdout = ""
     if hi.event == "session-start" and out.context:
@@ -275,7 +278,7 @@ def format_output(hi: HookInput, out: HookOutput) -> tuple[str, str, int]:
     return stdout, "", 0
 
 
-# ---------------------------------------------------------------- 6.4 candidate extraction (pure)
+# ---------------------------------------------------------------- candidate extraction (pure)
 
 def is_claude_code_transcript(path: Path) -> bool:
     """First non-empty line parses as a JSON object carrying `type` and `message`."""
@@ -309,7 +312,7 @@ def _user_text(content) -> str | None:
 
 
 def extract_candidates(transcript_path: Path, max_bytes: int = 2_000_000) -> list[dict]:
-    """§6.4: explicit-marker lines from user turns in the last max_bytes of a Claude Code transcript."""
+    """Explicit-marker lines from user turns in the last max_bytes of a Claude Code transcript."""
     try:
         with open(transcript_path, "rb") as f:
             f.seek(0, os.SEEK_END)
